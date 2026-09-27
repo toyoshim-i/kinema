@@ -175,3 +175,48 @@ fn test_cli_gen_leaf() {
     assert!(stdout.contains("module ATmega328P"));
     assert!(stdout.contains("Package_QFP:TQFP-32_7x7mm_P0.8mm"));
 }
+
+#[test]
+fn test_cli_check_strict_missing_board() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "--strict", "--json", "examples/timer_core.v"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(!output.status.success(), "kinema check --strict without board must exit non-zero");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], false);
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(diags.iter().any(|d| d["code"] == "board-missing" && d["severity"] == "error"));
+}
+
+#[test]
+fn test_cli_check_signoff_alias_missing_board() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "--signoff", "--json", "examples/timer_core.v"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(!output.status.success(), "kinema check --signoff without board must exit non-zero");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], false);
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(diags.iter().any(|d| d["code"] == "board-missing" && d["severity"] == "error"));
+}
+
+#[test]
+fn test_cli_check_normal_skip_note() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "examples/timer_core.v"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(output.status.success(), "kinema check without board must exit 0 in normal mode");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Board equivalence and DRC checks were skipped"));
+}
