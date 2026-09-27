@@ -155,15 +155,20 @@ impl Elaborator {
             nets_map.entry(canonical).or_default().push(pad.clone());
         }
 
-        // Group net attributes by canonical net, inheriting child and base wire attributes
+        // Group net attributes by canonical net, inheriting child and base wire attributes.
+        // Canonical net's own attributes take precedence over child wire attributes.
         let mut canonical_attrs: HashMap<String, NetAttrTuple> = HashMap::new();
-        for (wire, attrs) in &net_attrs {
-            let canonical = resolve_canonical_net(wire);
+        let mut sorted_wires: Vec<_> = net_attrs.keys().cloned().collect();
+        sorted_wires.sort();
+        for wire in sorted_wires {
+            let attrs = &net_attrs[&wire];
+            let canonical = resolve_canonical_net(&wire);
+            let is_canonical = wire == canonical;
             let entry = canonical_attrs.entry(canonical).or_insert((None, None, None, None));
-            if entry.0.is_none() && attrs.0.is_some() { entry.0 = attrs.0.clone(); }
-            if entry.1.is_none() && attrs.1.is_some() { entry.1 = attrs.1.clone(); }
-            if entry.2.is_none() && attrs.2.is_some() { entry.2 = attrs.2.clone(); }
-            if entry.3.is_none() && attrs.3.is_some() { entry.3 = attrs.3.clone(); }
+            if (is_canonical && attrs.0.is_some()) || entry.0.is_none() { entry.0 = attrs.0.clone(); }
+            if (is_canonical && attrs.1.is_some()) || entry.1.is_none() { entry.1 = attrs.1.clone(); }
+            if (is_canonical && attrs.2.is_some()) || entry.2.is_none() { entry.2 = attrs.2.clone(); }
+            if (is_canonical && attrs.3.is_some()) || entry.3.is_none() { entry.3 = attrs.3.clone(); }
         }
 
         let mut flat_nets = Vec::new();
