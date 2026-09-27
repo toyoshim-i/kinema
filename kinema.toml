@@ -1,0 +1,5 @@
+[project]
+name = "kinema_project"
+sources = ["src/*.v", "examples/*.v"]
+libraries = ["lib/*.v"]
+board = "board.kicad_pcb"

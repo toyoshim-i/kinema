@@ -1,0 +1,52 @@
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ProjectError {
+    #[error("Failed to read project file '{0}': {1}")]
+    Io(PathBuf, std::io::Error),
+    #[error("Failed to parse TOML in '{0}': {1}")]
+    Toml(PathBuf, Box<toml::de::Error>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSection {
+    pub name: Option<String>,
+    #[serde(default)]
+    pub sources: Vec<String>,
+    #[serde(default)]
+    pub libraries: Vec<String>,
+    pub board: Option<String>,
+}
+
+impl Default for ProjectSection {
+    fn default() -> Self {
+        Self {
+            name: Some("kinema_project".into()),
+            sources: vec!["src/*.v".into()],
+            libraries: vec!["lib/*.v".into()],
+            board: Some("board.kicad_pcb".into()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProjectConfig {
+    #[serde(default)]
+    pub project: ProjectSection,
+}
+
+impl ProjectConfig {
+    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, ProjectError> {
+        let path = path.as_ref();
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| ProjectError::Io(path.to_path_buf(), e))?;
+        toml::from_str(&content)
+            .map_err(|e| ProjectError::Toml(path.to_path_buf(), Box::new(e)))
+    }
+
+    pub fn load_or_default(path: impl AsRef<Path>) -> Self {
+        Self::load_from_file(path).unwrap_or_default()
+    }
+}

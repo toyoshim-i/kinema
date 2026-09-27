@@ -1,0 +1,20 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+
+# Cargo lock files (optional for libraries, kept for workspace if desired, but target/ must be ignored)
+# KiCad temporary and backup files
+*.kicad_prb
+*.kicad_pcb-bak
+*.bak
+*-save.kicad_pcb
+_autosave-*
+*.lck
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~

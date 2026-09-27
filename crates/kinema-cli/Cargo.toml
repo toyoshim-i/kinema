@@ -1,0 +1,23 @@
+[package]
+name = "kinema-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "kinema"
+path = "src/main.rs"
+
+[dependencies]
+kinema-syntax = { workspace = true }
+kinema-fmt = { workspace = true }
+kinema-elab = { workspace = true }
+kinema-lint = { workspace = true }
+kinema-kicad = { workspace = true }
+kinema-equiv = { workspace = true }
+clap = { workspace = true }
+glob = "0.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
