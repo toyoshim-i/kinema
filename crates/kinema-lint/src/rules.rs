@@ -5,6 +5,13 @@ use std::collections::{HashMap, HashSet};
 pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
 
+    let project_dir = source_files
+        .first()
+        .and_then(|f| f.modules.first())
+        .map(|m| std::path::Path::new(&m.span.file).parent().unwrap_or(std::path::Path::new(".")))
+        .unwrap_or(std::path::Path::new("."));
+    let fp_resolver = kinema_kicad::FootprintResolver::auto_discover(project_dir);
+
     // 8. duplicate-module
     let mut module_map: HashMap<String, Vec<&ModuleDef>> = HashMap::new();
     for file in source_files {
@@ -21,7 +28,7 @@ pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
                 stage: "lint".into(),
                 code: "duplicate-module".into(),
                 severity: "error".into(),
-                location: dup.span.to_location(),
+                location: Some(dup.span.to_location()),
                 subject: Subject {
                     kind: "component".into(),
                     name: Some(name.clone()),
@@ -78,7 +85,7 @@ pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
                 stage: "lint".into(),
                 code: "top-module".into(),
                 severity: "error".into(),
-                location: loc,
+                location: Some(loc),
                 subject: Subject {
                     kind: "component".into(),
                     name: None,
@@ -101,7 +108,7 @@ pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
             stage: "lint".into(),
             code: "top-module".into(),
             severity: "error".into(),
-            location: second.span.to_location(),
+            location: Some(second.span.to_location()),
             subject: Subject {
                 kind: "component".into(),
                 name: Some(second.name.clone()),
@@ -125,7 +132,7 @@ pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
     // Check modules individually
     for file in source_files {
         for m in &file.modules {
-            check_module(m, &module_map, &mut diags);
+            check_module(m, &module_map, &fp_resolver, &mut diags);
         }
     }
 
@@ -135,6 +142,7 @@ pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
 fn check_module(
     module: &ModuleDef,
     module_map: &HashMap<String, Vec<&ModuleDef>>,
+    fp_resolver: &kinema_kicad::FootprintResolver,
     diags: &mut Vec<Diagnostic>,
 ) {
     let is_leaf = module.items.is_empty() && module.name != "join";
@@ -153,7 +161,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "leaf-incomplete".into(),
                 severity: "error".into(),
-                location: module.span.to_location(),
+                location: Some(module.span.to_location()),
                 subject: Subject {
                     kind: "component".into(),
                     name: Some(module.name.clone()),
@@ -187,7 +195,7 @@ fn check_module(
                     stage: "lint".into(),
                     code: "leaf-incomplete".into(),
                     severity: "error".into(),
-                    location: port.span.to_location(),
+                    location: Some(port.span.to_location()),
                     subject: Subject {
                         kind: "pin".into(),
                         name: Some(port.name.clone()),
@@ -218,7 +226,7 @@ fn check_module(
                             stage: "lint".into(),
                             code: "decouple-multi-pad".into(),
                             severity: "error".into(),
-                            location: port.span.to_location(),
+                            location: Some(port.span.to_location()),
                             subject: Subject {
                                 kind: "pin".into(),
                                 name: Some(port.name.clone()),
@@ -246,7 +254,7 @@ fn check_module(
                                 stage: "lint".into(),
                                 code: "pad-duplicate".into(),
                                 severity: "error".into(),
-                                location: port.span.to_location(),
+                                location: Some(port.span.to_location()),
                                 subject: Subject {
                                     kind: "pin".into(),
                                     name: Some(port.name.clone()),
@@ -273,16 +281,45 @@ fn check_module(
             }
         }
 
-        // 13. pad-count (if footprint specifies pad count hint, e.g., SOIC-8 has 8 pads)
+        // 13. pad-count and 14. footprint-missing on leaf module
         if let Some(fp_attr) = module.attrs.iter().find(|a| a.key == "footprint") {
             if let Some(fp) = &fp_attr.value {
-                if let Some(expected_count) = extract_expected_pad_count(fp) {
+                let resolved = fp_resolver.resolve(fp);
+                let expected_count = match resolved {
+                    Ok(info) => Some(info.pad_count),
+                    Err(kinema_kicad::FootprintResolveError::FootprintNotFound(_))
+                    | Err(kinema_kicad::FootprintResolveError::LibraryNotFound(_)) => {
+                        diags.push(Diagnostic {
+                            stage: "lint".into(),
+                            code: "footprint-missing".into(),
+                            severity: "error".into(),
+                            location: Some(module.span.to_location()),
+                            subject: Subject {
+                                kind: "component".into(),
+                                name: Some(module.name.clone()),
+                                path: Some(module.name.clone()),
+                                id: None,
+                                ref_des: None,
+                                pad: None,
+                            },
+                            related: vec![],
+                            expected: None,
+                            actual: Some(serde_json::json!(fp)),
+                            fix: Some(format!("Ensure footprint '{}' exists in library or fp-lib-table", fp)),
+                            message: format!("Footprint '{}' does not exist in footprint libraries", fp),
+                        });
+                        None
+                    }
+                    _ => extract_expected_pad_count(fp),
+                };
+
+                if let Some(expected_count) = expected_count {
                     if seen_pads.len() != expected_count {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
                             code: "pad-count".into(),
                             severity: "error".into(),
-                            location: module.span.to_location(),
+                            location: Some(module.span.to_location()),
                             subject: Subject {
                                 kind: "component".into(),
                                 name: Some(module.name.clone()),
@@ -359,7 +396,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "diffpair-invalid".into(),
                 severity: "error".into(),
-                location: wire_decl.span.to_location(),
+                location: Some(wire_decl.span.to_location()),
                 subject: Subject {
                     kind: "net".into(),
                     name: Some(dp_name.clone()),
@@ -409,7 +446,7 @@ fn check_module(
                             stage: "lint".into(),
                             code: "join-name".into(),
                             severity: "error".into(),
-                            location: inst.span.to_location(),
+                            location: Some(inst.span.to_location()),
                             subject: Subject {
                                 kind: "join".into(),
                                 name: Some(inst.instance_name.clone()),
@@ -462,7 +499,7 @@ fn check_module(
                                 stage: "lint".into(),
                                 code: "duplicate-identity".into(),
                                 severity: "error".into(),
-                                location: attr.span.to_location(),
+                                location: Some(attr.span.to_location()),
                                 subject: Subject {
                                     kind: "component".into(),
                                     name: Some(inst.instance_name.clone()),
@@ -492,7 +529,7 @@ fn check_module(
                                 stage: "lint".into(),
                                 code: "duplicate-identity".into(),
                                 severity: "error".into(),
-                                location: attr.span.to_location(),
+                                location: Some(attr.span.to_location()),
                                 subject: Subject {
                                     kind: "component".into(),
                                     name: Some(inst.instance_name.clone()),
@@ -525,7 +562,7 @@ fn check_module(
                     stage: "lint".into(),
                     code: "recursive-instance".into(),
                     severity: "error".into(),
-                    location: inst.span.to_location(),
+                    location: Some(inst.span.to_location()),
                     subject: Subject {
                         kind: "component".into(),
                         name: Some(inst.instance_name.clone()),
@@ -558,7 +595,7 @@ fn check_module(
                         stage: "lint".into(),
                         code: "footprint-missing".into(),
                         severity: "error".into(),
-                        location: inst.span.to_location(),
+                        location: Some(inst.span.to_location()),
                         subject: Subject {
                             kind: "component".into(),
                             name: Some(inst.instance_name.clone()),
@@ -573,6 +610,32 @@ fn check_module(
                         fix: Some("Specify (* footprint = \"...\" *) on the instance".into()),
                         message: format!("Footprint not specified for component '{}'", inst.instance_name),
                     });
+                } else if let Some(fp_val) = inst_fp.or(leaf_fp).and_then(|a| a.value.as_deref()) {
+                    match fp_resolver.resolve(fp_val) {
+                        Err(kinema_kicad::FootprintResolveError::FootprintNotFound(_))
+                        | Err(kinema_kicad::FootprintResolveError::LibraryNotFound(_)) => {
+                            diags.push(Diagnostic {
+                                stage: "lint".into(),
+                                code: "footprint-missing".into(),
+                                severity: "error".into(),
+                                location: Some(inst.span.to_location()),
+                                subject: Subject {
+                                    kind: "component".into(),
+                                    name: Some(inst.instance_name.clone()),
+                                    path: Some(format!("{}.{}", module.name, inst.instance_name)),
+                                    id: None,
+                                    ref_des: None,
+                                    pad: None,
+                                },
+                                related: vec![],
+                                expected: None,
+                                actual: Some(serde_json::json!(fp_val)),
+                                fix: Some(format!("Ensure footprint '{}' exists in library or fp-lib-table", fp_val)),
+                                message: format!("Footprint '{}' does not exist in footprint libraries", fp_val),
+                            });
+                        }
+                        _ => {}
+                    }
                 }
             }
 
@@ -584,7 +647,7 @@ fn check_module(
                         stage: "lint".into(),
                         code: "unknown-param".into(),
                         severity: "error".into(),
-                        location: p_ovr.span.to_location(),
+                        location: Some(p_ovr.span.to_location()),
                         subject: Subject {
                             kind: "component".into(),
                             name: Some(inst.instance_name.clone()),
@@ -611,7 +674,7 @@ fn check_module(
                             stage: "lint".into(),
                             code: "param-missing".into(),
                             severity: "error".into(),
-                            location: inst.span.to_location(),
+                            location: Some(inst.span.to_location()),
                             subject: Subject {
                                 kind: "component".into(),
                                 name: Some(inst.instance_name.clone()),
@@ -638,7 +701,7 @@ fn check_module(
                         stage: "lint".into(),
                         code: "missing-port".into(),
                         severity: "error".into(),
-                        location: inst.span.to_location(),
+                        location: Some(inst.span.to_location()),
                         subject: Subject {
                             kind: "component".into(),
                             name: Some(inst.instance_name.clone()),
@@ -670,7 +733,7 @@ fn check_module(
                         stage: "lint".into(),
                         code: "power-unconnected".into(),
                         severity: "error".into(),
-                        location: conn.span.to_location(),
+                        location: Some(conn.span.to_location()),
                         subject: Subject {
                             kind: "pin".into(),
                             name: Some(format!("{}.{}", inst.instance_name, port.name)),
@@ -693,7 +756,7 @@ fn check_module(
                         stage: "lint".into(),
                         code: "nc-connected".into(),
                         severity: "error".into(),
-                        location: conn.span.to_location(),
+                        location: Some(conn.span.to_location()),
                         subject: Subject {
                             kind: "pin".into(),
                             name: Some(format!("{}.{}", inst.instance_name, port.name)),
@@ -730,7 +793,7 @@ fn check_module(
                                 stage: "lint".into(),
                                 code: "undeclared-net".into(),
                                 severity: "error".into(),
-                                location: conn.span.to_location(),
+                                location: Some(conn.span.to_location()),
                                 subject: Subject {
                                     kind: "net".into(),
                                     name: Some(w.clone()),
@@ -754,7 +817,7 @@ fn check_module(
                                 stage: "lint".into(),
                                 code: "hub-direct-pad".into(),
                                 severity: "error".into(),
-                                location: conn.span.to_location(),
+                                location: Some(conn.span.to_location()),
                                 subject: Subject {
                                     kind: "hub".into(),
                                     name: Some(w.clone()),
@@ -800,7 +863,7 @@ fn check_module(
                         net_pad_counts.entry(w.clone()).or_default().push(format!("{}.{}", inst.instance_name, port.name));
 
                         // 16. pin-wire-name check if wire is joined to a hub
-                        let is_hub_child = joins_by_child.contains_key(&w);
+                        let is_hub_child = joins_by_child.contains_key(&w) && !hub_wires.contains_key(&w);
                         if is_hub_child {
                             pin_wires_used.insert(w.clone());
                             let expected_wire_name = format!("{}_{}", inst.instance_name, port.name);
@@ -810,7 +873,7 @@ fn check_module(
                                     stage: "lint".into(),
                                     code: "pin-wire-name".into(),
                                     severity: "error".into(),
-                                    location: conn.span.to_location(),
+                                    location: Some(conn.span.to_location()),
                                     subject: Subject {
                                         kind: "pin-wire".into(),
                                         name: Some(w.clone()),
@@ -846,7 +909,7 @@ fn check_module(
                                 stage: "lint".into(),
                                 code: "decouple-missing".into(),
                                 severity: "error".into(),
-                                location: conn.span.to_location(),
+                                location: Some(conn.span.to_location()),
                                 subject: Subject {
                                     kind: "pin".into(),
                                     name: Some(format!("{}.{}", inst.instance_name, port.name)),
@@ -900,7 +963,7 @@ fn check_module(
                             stage: "lint".into(),
                             code: "width-mismatch".into(),
                             severity: "error".into(),
-                            location: conn.span.to_location(),
+                            location: Some(conn.span.to_location()),
                             subject: Subject {
                                 kind: "pin".into(),
                                 name: Some(format!("{}.{}", inst.instance_name, port.name)),
@@ -943,7 +1006,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "join-cycle".into(),
                 severity: "error".into(),
-                location: inst.span.to_location(),
+                location: Some(inst.span.to_location()),
                 subject: Subject {
                     kind: "join".into(),
                     name: Some(inst.instance_name.clone()),
@@ -977,7 +1040,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "pin-wire-shape".into(),
                 severity: "error".into(),
-                location: wire_decl.map(|w| w.span.to_location()).unwrap_or(module.span.to_location()),
+                location: Some(wire_decl.map(|w| w.span.to_location()).unwrap_or(module.span.to_location())),
                 subject: Subject {
                     kind: "pin-wire".into(),
                     name: Some(wire_name.clone()),
@@ -1020,7 +1083,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "constraint-conflict".into(),
                 severity: "error".into(),
-                location: widths[1].1.clone(),
+                location: Some(widths[1].1.clone()),
                 subject: Subject {
                     kind: "net".into(),
                     name: Some(net_name.clone()),
@@ -1050,7 +1113,7 @@ fn check_module(
                     stage: "lint".into(),
                     code: "pin-wire-attr".into(),
                     severity: "error".into(),
-                    location: wire.span.to_location(),
+                    location: Some(wire.span.to_location()),
                     subject: Subject {
                         kind: "pin-wire".into(),
                         name: Some(wire.name.clone()),
@@ -1081,7 +1144,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "hub-too-few".into(),
                 severity: "error".into(),
-                location: hub_wire.span.to_location(),
+                location: Some(hub_wire.span.to_location()),
                 subject: Subject {
                     kind: "hub".into(),
                     name: Some(hub_name.clone()),
@@ -1110,7 +1173,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "power-conflict".into(),
                 severity: "error".into(),
-                location: locations[1].clone(),
+                location: Some(locations[1].clone()),
                 subject: Subject {
                     kind: "net".into(),
                     name: Some(net_name.clone()),
@@ -1144,7 +1207,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "single-pin-net".into(),
                 severity: "warning".into(),
-                location: loc,
+                location: Some(loc),
                 subject: Subject {
                     kind: "net".into(),
                     name: Some(net_name.clone()),
@@ -1171,7 +1234,7 @@ fn check_module(
                 stage: "lint".into(),
                 code: "undriven-net".into(),
                 severity: "warning".into(),
-                location: loc,
+                location: Some(loc),
                 subject: Subject {
                     kind: "net".into(),
                     name: Some(net_name.clone()),
@@ -1189,6 +1252,19 @@ fn check_module(
         }
     }
 }
+
+pub const VALID_ETYPES: &[&str] = &[
+    "input",
+    "output",
+    "bidirectional",
+    "tri_state",
+    "passive",
+    "power_in",
+    "power_out",
+    "open_collector",
+    "open_emitter",
+    "no_connect",
+];
 
 fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut Vec<Diagnostic>) {
     let valid = match attr.key.as_str() {
@@ -1214,7 +1290,7 @@ fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut 
             stage: "lint".into(),
             code: "unknown-attr".into(),
             severity: "error".into(),
-            location: attr.span.to_location(),
+            location: Some(attr.span.to_location()),
             subject: Subject {
                 kind: target_kind.into(),
                 name: Some(attr.key.clone()),
@@ -1229,6 +1305,30 @@ fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut 
             fix: None,
             message: format!("Unknown attribute '{}' or attribute attached to invalid target", attr.key),
         });
+    } else if attr.key == "etype" {
+        if let Some(val) = &attr.value {
+            if !VALID_ETYPES.contains(&val.as_str()) {
+                diags.push(Diagnostic {
+                    stage: "lint".into(),
+                    code: "unknown-attr".into(),
+                    severity: "error".into(),
+                    location: Some(attr.span.to_location()),
+                    subject: Subject {
+                        kind: target_kind.into(),
+                        name: Some(attr.key.clone()),
+                        path: None,
+                        id: None,
+                        ref_des: None,
+                        pad: None,
+                    },
+                    related: vec![],
+                    expected: Some(serde_json::json!(VALID_ETYPES)),
+                    actual: Some(serde_json::json!(val)),
+                    fix: Some("Specify valid etype (e.g. \"input\", \"output\", \"passive\", \"power_in\", etc.)".into()),
+                    message: format!("Invalid etype '{}'. Must be one of {:?}", val, VALID_ETYPES),
+                });
+            }
+        }
     }
 }
 
@@ -1242,7 +1342,7 @@ fn check_unit(attr: &Attr, diags: &mut Vec<Diagnostic>) {
                     stage: "lint".into(),
                     code: "unit-invalid".into(),
                     severity: "error".into(),
-                    location: attr.span.to_location(),
+                    location: Some(attr.span.to_location()),
                     subject: Subject {
                         kind: "wire".into(),
                         name: Some(attr.key.clone()),
@@ -1268,7 +1368,7 @@ fn check_unit(attr: &Attr, diags: &mut Vec<Diagnostic>) {
                     stage: "lint".into(),
                     code: "unit-invalid".into(),
                     severity: "error".into(),
-                    location: attr.span.to_location(),
+                    location: Some(attr.span.to_location()),
                     subject: Subject {
                         kind: "wire".into(),
                         name: Some(attr.key.clone()),
@@ -1291,6 +1391,10 @@ fn check_unit(attr: &Attr, diags: &mut Vec<Diagnostic>) {
 fn extract_expected_pad_count(footprint: &str) -> Option<usize> {
     if footprint.contains("SOIC-8") || footprint.contains("DIP-8") {
         Some(8)
+    } else if footprint.contains("SOT-23-5") {
+        Some(5)
+    } else if footprint.contains("SOT-23-6") {
+        Some(6)
     } else if footprint.contains("SOT-23") {
         Some(3)
     } else if footprint.contains("QFP-32") {

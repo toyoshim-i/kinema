@@ -542,4 +542,84 @@ endmodule
             errors
         );
     }
+
+    #[test]
+    fn test_hub_direct_pad_suppresses_pin_wire_diagnostics() {
+        let code = r#"
+module join (inout P, inout C); endmodule
+module leaf (inout A); endmodule
+module top ();
+    wire VCC;
+    (* nearby *)
+    wire hub1;
+    join j_hub1 (.P(VCC), .C(hub1));
+    leaf u1 (.A(hub1));
+endmodule
+"#;
+        let report = lint_str("test.v", code).expect("must parse");
+        assert!(report.diagnostics.iter().any(|d| d.code == "hub-direct-pad"));
+        assert!(!report.diagnostics.iter().any(|d| d.code == "pin-wire-name"), "Must not cascade pin-wire-name: {:?}", report.diagnostics);
+        assert!(!report.diagnostics.iter().any(|d| d.code == "pin-wire-attr"), "Must not cascade pin-wire-attr: {:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn test_rule_invalid_etype_typo() {
+        let code = r#"
+module leaf (
+    (* pad = "1", etype = "outptu" *) inout A
+);
+endmodule
+"#;
+        let report = lint_str("test.v", code).expect("must parse");
+        assert!(!report.ok);
+        assert!(report.diagnostics.iter().any(|d| d.code == "unknown-attr" && d.message.contains("outptu")), "Expected unknown-attr for etype typo: {:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn test_rule_pad_count_sot23_5() {
+        let code = r#"
+(* prefix = "U", footprint = "Package_TO_SOT_SMD:SOT-23-5" *)
+module leaf (
+    (* pad = "1", etype = "passive" *) inout P1,
+    (* pad = "2", etype = "passive" *) inout P2,
+    (* pad = "3", etype = "passive" *) inout P3
+);
+endmodule
+module top ();
+    leaf u1 (.P1(), .P2(), .P3());
+endmodule
+"#;
+        let report = lint_str("test.v", code).expect("must parse");
+        assert!(!report.ok);
+        // SOT-23-5 has 5 pads, but only 3 provided -> pad-count error
+        assert!(report.diagnostics.iter().any(|d| d.code == "pad-count"), "SOT-23-5 must require 5 pads, got: {:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn test_rule_footprint_nonexistent_fails() {
+        // Mock a directory with fp-lib-table where Nope is not found
+        let temp_dir = std::env::temp_dir().join(format!("kinema_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let table_path = temp_dir.join("fp-lib-table");
+        let _ = std::fs::write(&table_path, "(fp_lib_table\n  (lib (name \"SomeLib\")(type \"KiCad\")(uri \"some\"))\n)");
+
+        let code = r#"
+(* prefix = "U", footprint = "Nope:DoesNotExist" *)
+module leaf (
+    (* pad = "1", etype = "passive" *) inout A
+);
+endmodule
+module top ();
+    leaf u1 (.A());
+endmodule
+"#;
+        let file_path = temp_dir.join("test.v");
+        let _ = std::fs::write(&file_path, code);
+        let ast = kinema_syntax::parser::parse(&file_path.display().to_string(), code).expect("must parse");
+        let report = lint_source_files(&[ast]);
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        assert!(!report.ok);
+        assert!(report.diagnostics.iter().any(|d| d.code == "footprint-missing"), "Nope:DoesNotExist must report footprint-missing: {:?}", report.diagnostics);
+    }
 }

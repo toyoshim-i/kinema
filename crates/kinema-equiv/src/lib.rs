@@ -7,6 +7,7 @@ mod tests {
     use super::*;
     use kinema_elab::ir::*;
     use kinema_kicad::pcb_parser::*;
+    use kinema_lint::diagnostic::*;
 
     fn sample_ir() -> FlatNetlistIR {
         FlatNetlistIR {
@@ -109,6 +110,7 @@ mod tests {
     (tstamp "a3f9-uuid")
     (property "Reference" "U1")
     (property "Value" "NE555DR")
+    (property "mpn" "NE555DR")
     (pad "7" smd rect (net 1 "DIS"))
   )
   (footprint "Resistor_SMD:R_0603_1608Metric"
@@ -169,5 +171,147 @@ mod tests {
         let report = check_equivalence(&ir, &board);
         assert!(!report.ok);
         assert!(report.diagnostics.iter().any(|d| d.code == "net-partition-mismatch"));
+    }
+
+    #[test]
+    fn test_equiv_kicad10_board_matching() {
+        let ir = sample_ir();
+        let pcb_content = r#"
+(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
+    (tstamp "a3f9-uuid")
+    (property "Reference" "U1")
+    (property "Value" "NE555DR")
+    (property "mpn" "NE555DR")
+    (pad "7" smd rect (net "DIS"))
+  )
+  (footprint "Resistor_SMD:R_0603_1608Metric"
+    (tstamp "r1-uuid")
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "2" smd rect (net "DIS"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb_content).expect("parse pcb");
+        let report = check_equivalence(&ir, &board);
+        assert!(report.ok, "KiCad 10 board without net numbers must pass equivalence: {:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn test_equiv_diagnostic_reports_correct_component_and_pads() {
+        let ir = sample_ir();
+        // In this test, U1 pad 7 is correctly on "DIS", but R1 pad 2 is moved to "OTHER"
+        let pcb_content = r#"
+(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
+    (tstamp "a3f9-uuid")
+    (property "Reference" "U1")
+    (property "Value" "NE555DR")
+    (property "mpn" "NE555DR")
+    (pad "7" smd rect (net "DIS"))
+  )
+  (footprint "Resistor_SMD:R_0603_1608Metric"
+    (tstamp "r1-uuid")
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "2" smd rect (net "OTHER"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb_content).expect("parse pcb");
+        let report = check_equivalence(&ir, &board);
+        assert!(!report.ok);
+        let diag = report.diagnostics.iter().find(|d| d.code == "net-partition-mismatch").expect("must have net-partition-mismatch");
+        // Verify location is None (omitted in JSON)
+        assert!(diag.location.is_none(), "Equivalence diagnostic location must be None/omitted, got: {:?}", diag.location);
+        // Verify it reports the missing pad R1.2, NOT blaming U1
+        assert!(diag.message.contains("R1.2") || diag.message.contains("R1"), "Message should mention R1 or R1.2, got: {}", diag.message);
+        assert!(!diag.message.contains("Pads of U1 expected on net"), "Must not falsely blame U1: {}", diag.message);
+    }
+
+    #[test]
+    fn test_equiv_nc_pad_connected() {
+        let mut ir = sample_ir();
+        ir.components[0].pads.push(ComponentPad {
+            component_path: "U1".into(),
+            component_ref: "U1".into(),
+            pad_number: "5".into(),
+            port_name: "CTRL".into(),
+            etype: "no_connect".into(),
+        });
+        let pcb_content = r#"
+(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
+    (tstamp "a3f9-uuid")
+    (property "Reference" "U1")
+    (property "Value" "NE555DR")
+    (property "mpn" "NE555DR")
+    (pad "7" smd rect (net "DIS"))
+    (pad "5" smd rect (net "GND"))
+  )
+  (footprint "Resistor_SMD:R_0603_1608Metric"
+    (tstamp "r1-uuid")
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "2" smd rect (net "DIS"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb_content).expect("parse pcb");
+        let report = check_equivalence(&ir, &board);
+        assert!(!report.ok);
+        assert!(report.diagnostics.iter().any(|d| d.code == "nc-pad-connected"), "Expected nc-pad-connected diagnostic: {:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn test_equiv_field_mismatch_mpn() {
+        let ir = sample_ir(); // U1 has mpn: Some("NE555DR")
+        let pcb_content = r#"
+(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
+    (tstamp "a3f9-uuid")
+    (property "Reference" "U1")
+    (property "Value" "NE555DR")
+    (property "mpn" "WRONG_MPN")
+    (pad "7" smd rect (net "DIS"))
+  )
+  (footprint "Resistor_SMD:R_0603_1608Metric"
+    (tstamp "r1-uuid")
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "2" smd rect (net "DIS"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb_content).expect("parse pcb");
+        let report = check_equivalence(&ir, &board);
+        assert!(!report.ok);
+        assert!(report.diagnostics.iter().any(|d| d.code == "field-mismatch" && d.message.contains("MPN")), "Expected field-mismatch for MPN: {:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn test_equiv_diagnostic_json_omits_empty_location() {
+        let diag = Diagnostic {
+            stage: "equiv".into(),
+            code: "net-partition-mismatch".into(),
+            severity: "error".into(),
+            location: None,
+            subject: Subject {
+                kind: "net".into(),
+                name: Some("DIS".into()),
+                path: None,
+                id: None,
+                ref_des: None,
+                pad: None,
+            },
+            related: vec![],
+            expected: None,
+            actual: None,
+            fix: None,
+            message: "test".into(),
+        };
+        let json_str = serde_json::to_string(&diag).unwrap();
+        assert!(!json_str.contains("\"location\""), "JSON should not contain location when None: {}", json_str);
     }
 }

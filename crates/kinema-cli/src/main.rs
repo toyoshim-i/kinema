@@ -150,7 +150,7 @@ fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, LintReport> {
                     stage: "parse".into(),
                     code: "io-error".into(),
                     severity: "error".into(),
-                    location: SourceLocation { file: path.display().to_string(), line: 1, col: 1 },
+                    location: Some(SourceLocation { file: path.display().to_string(), line: 1, col: 1 }),
                     subject: Subject { kind: "file".into(), name: Some(path.display().to_string()), path: None, id: None, ref_des: None, pad: None },
                     related: vec![],
                     expected: None,
@@ -169,7 +169,7 @@ fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, LintReport> {
                     stage: "parse".into(),
                     code: "syntax-error".into(),
                     severity: "error".into(),
-                    location: SourceLocation { file: e.file, line: e.line, col: e.col },
+                    location: Some(SourceLocation { file: e.file, line: e.line, col: e.col }),
                     subject: Subject { kind: "syntax".into(), name: None, path: None, id: None, ref_des: None, pad: None },
                     related: vec![],
                     expected: None,
@@ -254,11 +254,11 @@ fn main() -> ExitCode {
                                     stage: "fmt".into(),
                                     code: "not-formatted".into(),
                                     severity: "error".into(),
-                                    location: SourceLocation {
+                                    location: Some(SourceLocation {
                                         file: path.display().to_string(),
                                         line: 1,
                                         col: 1,
-                                    },
+                                    }),
                                     subject: Subject {
                                         kind: "file".into(),
                                         name: Some(path.display().to_string()),
@@ -301,7 +301,7 @@ fn main() -> ExitCode {
                                             stage: "equiv".into(),
                                             code: "elab-error".into(),
                                             severity: "error".into(),
-                                            location: SourceLocation { file: bp.display().to_string(), line: 1, col: 1 },
+                                            location: Some(SourceLocation { file: bp.display().to_string(), line: 1, col: 1 }),
                                             subject: Subject { kind: "circuit".into(), name: None, path: None, id: None, ref_des: None, pad: None },
                                             related: vec![],
                                             expected: None,
@@ -316,7 +316,7 @@ fn main() -> ExitCode {
                                         stage: "equiv".into(),
                                         code: "pcb-parse-error".into(),
                                         severity: "error".into(),
-                                        location: SourceLocation { file: bp.display().to_string(), line: 1, col: 1 },
+                                        location: Some(SourceLocation { file: bp.display().to_string(), line: 1, col: 1 }),
                                         subject: Subject { kind: "board".into(), name: None, path: None, id: None, ref_des: None, pad: None },
                                         related: vec![],
                                         expected: None,
@@ -331,7 +331,7 @@ fn main() -> ExitCode {
                                     stage: "equiv".into(),
                                     code: "io-error".into(),
                                     severity: "error".into(),
-                                    location: SourceLocation { file: bp.display().to_string(), line: 1, col: 1 },
+                                    location: Some(SourceLocation { file: bp.display().to_string(), line: 1, col: 1 }),
                                     subject: Subject { kind: "board".into(), name: None, path: None, id: None, ref_des: None, pad: None },
                                     related: vec![],
                                     expected: None,
@@ -346,7 +346,7 @@ fn main() -> ExitCode {
                             stage: "equiv".into(),
                             code: "board-missing".into(),
                             severity: "error".into(),
-                            location: SourceLocation { file: bp.display().to_string(), line: 1, col: 1 },
+                            location: Some(SourceLocation { file: bp.display().to_string(), line: 1, col: 1 }),
                             subject: Subject { kind: "board".into(), name: Some(bp.display().to_string()), path: None, id: None, ref_des: None, pad: None },
                             related: vec![],
                             expected: None,
@@ -360,7 +360,7 @@ fn main() -> ExitCode {
                         stage: "equiv".into(),
                         code: "board-missing".into(),
                         severity: "error".into(),
-                        location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                        location: Some(SourceLocation { file: "".into(), line: 1, col: 1 }),
                         subject: Subject { kind: "board".into(), name: None, path: None, id: None, ref_des: None, pad: None },
                         related: vec![],
                         expected: None,
@@ -381,7 +381,7 @@ fn main() -> ExitCode {
                         stage: "drc".into(),
                         code: "board-missing".into(),
                         severity: "error".into(),
-                        location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                        location: Some(SourceLocation { file: "".into(), line: 1, col: 1 }),
                         subject: Subject { kind: "board".into(), name: None, path: None, id: None, ref_des: None, pad: None },
                         related: vec![],
                         expected: None,
@@ -536,10 +536,12 @@ fn output_report(report: &LintReport, json: bool) {
     } else {
         for d in &report.diagnostics {
             let sev = if d.severity == "error" { "ERROR" } else { "WARNING" };
-            println!(
-                "[{}] {} [{}:{}]: {}",
-                sev, d.code, d.location.file, d.location.line, d.message
-            );
+            let loc_str = if let Some(loc) = &d.location {
+                format!(" [{}:{}]", loc.file, loc.line)
+            } else {
+                String::new()
+            };
+            println!("[{}] {}{}: {}", sev, d.code, loc_str, d.message);
             if let Some(f) = &d.fix {
                 println!("  Suggestion: {}", f);
             }
@@ -616,7 +618,7 @@ fn run_kicad_drc(board_path: &Path, is_explicit_stage: bool) -> Vec<Diagnostic> 
             stage: "drc".into(),
             code: "board-missing".into(),
             severity: "error".into(),
-            location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+            location: Some(SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 }),
             subject: Subject { kind: "board".into(), name: Some(board_path.display().to_string()), path: None, id: None, ref_des: None, pad: None },
             related: vec![],
             expected: None,
@@ -654,7 +656,7 @@ fn run_kicad_drc(board_path: &Path, is_explicit_stage: bool) -> Vec<Diagnostic> 
                                     stage: "drc".into(),
                                     code: v_type.to_string(),
                                     severity: if severity == "warning" { "warning".into() } else { "error".into() },
-                                    location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+                                    location: Some(SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 }),
                                     subject: Subject { kind: "board".into(), name: Some(board_path.display().to_string()), path: None, id: None, ref_des: None, pad: None },
                                     related: vec![],
                                     expected: None,
@@ -673,7 +675,7 @@ fn run_kicad_drc(board_path: &Path, is_explicit_stage: bool) -> Vec<Diagnostic> 
                     stage: "drc".into(),
                     code: "drc-error".into(),
                     severity: "error".into(),
-                    location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+                    location: Some(SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 }),
                     subject: Subject { kind: "board".into(), name: Some(board_path.display().to_string()), path: None, id: None, ref_des: None, pad: None },
                     related: vec![],
                     expected: None,
@@ -689,7 +691,7 @@ fn run_kicad_drc(board_path: &Path, is_explicit_stage: bool) -> Vec<Diagnostic> 
                 stage: "drc".into(),
                 code: "kicad-cli-not-found".into(),
                 severity: severity.into(),
-                location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+                location: Some(SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 }),
                 subject: Subject { kind: "tool".into(), name: Some("kicad-cli".into()), path: None, id: None, ref_des: None, pad: None },
                 related: vec![],
                 expected: None,

@@ -30,7 +30,8 @@ pub struct Diagnostic {
     pub stage: String, // "lint", "parse", "fmt", "equiv", "drc"
     pub code: String,
     pub severity: String, // "error" or "warning"
-    pub location: SourceLocation,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<SourceLocation>,
     pub subject: Subject,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related: Vec<Related>,

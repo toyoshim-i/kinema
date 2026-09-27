@@ -1,8 +1,7 @@
 use kinema_elab::ir::*;
 use kinema_kicad::pcb_parser::*;
 use kinema_lint::diagnostic::*;
-use kinema_syntax::ast::SourceLocation;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
     let mut diags = Vec::new();
@@ -25,8 +24,10 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
 
     // Map IR components to PCB footprints
     let mut comp_to_pcb: HashMap<String, &PcbFootprint> = HashMap::new(); // comp.identity_key -> PcbFootprint
+    let mut comp_ref_by_id: HashMap<String, String> = HashMap::new();
 
     for comp in &ir.components {
+        comp_ref_by_id.insert(comp.identity_key.clone(), comp.refdes.clone());
         let pcb_fp = if let Some(fp) = pcb_by_tstamp.get(&comp.uuid).or_else(|| pcb_by_tstamp.get(&comp.identity_key)) {
             matched_pcb_fps.insert(fp.tstamp.clone());
             Some(*fp)
@@ -36,7 +37,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                 stage: "equiv".into(),
                 code: "identity-missing".into(),
                 severity: "warning".into(),
-                location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                location: None,
                 subject: Subject {
                     kind: "component".into(),
                     name: Some(comp.refdes.clone()),
@@ -57,7 +58,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                 stage: "equiv".into(),
                 code: "component-missing".into(),
                 severity: "error".into(),
-                location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                location: None,
                 subject: Subject {
                     kind: "component".into(),
                     name: Some(comp.refdes.clone()),
@@ -84,7 +85,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                     stage: "equiv".into(),
                     code: "footprint-mismatch".into(),
                     severity: "error".into(),
-                    location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                    location: None,
                     subject: Subject {
                         kind: "component".into(),
                         name: Some(comp.refdes.clone()),
@@ -107,7 +108,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                     stage: "equiv".into(),
                     code: "ref-mismatch".into(),
                     severity: "error".into(),
-                    location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                    location: None,
                     subject: Subject {
                         kind: "component".into(),
                         name: Some(comp.refdes.clone()),
@@ -131,7 +132,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                         stage: "equiv".into(),
                         code: "field-mismatch".into(),
                         severity: "error".into(),
-                        location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                        location: None,
                         subject: Subject {
                             kind: "component".into(),
                             name: Some(comp.refdes.clone()),
@@ -149,12 +150,38 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                 }
             }
 
+            // MPN check
+            if let Some(exp_mpn) = &comp.mpn {
+                let actual_mpn = fp.mpn.as_deref().unwrap_or("");
+                if exp_mpn != actual_mpn {
+                    diags.push(Diagnostic {
+                        stage: "equiv".into(),
+                        code: "field-mismatch".into(),
+                        severity: "error".into(),
+                        location: None,
+                        subject: Subject {
+                            kind: "component".into(),
+                            name: Some(comp.refdes.clone()),
+                            path: Some(comp.path.clone()),
+                            id: Some(comp.identity_key.clone()),
+                            ref_des: Some(comp.refdes.clone()),
+                            pad: None,
+                        },
+                        related: vec![],
+                        expected: Some(serde_json::json!(exp_mpn)),
+                        actual: Some(serde_json::json!(actual_mpn)),
+                        fix: None,
+                        message: format!("MPN mismatch for component '{}' (expected: {}, actual: {})", comp.refdes, exp_mpn, actual_mpn),
+                    });
+                }
+            }
+
             if comp.dnp != fp.dnp {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
                     code: "field-mismatch".into(),
                     severity: "error".into(),
-                    location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                    location: None,
                     subject: Subject {
                         kind: "component".into(),
                         name: Some(comp.refdes.clone()),
@@ -183,7 +210,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                 stage: "equiv".into(),
                 code: "component-extra".into(),
                 severity: "error".into(),
-                location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                location: None,
                 subject: Subject {
                     kind: "component".into(),
                     name: Some(fp.refdes.clone()),
@@ -208,7 +235,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
 
     for (comp_key, fp) in &comp_to_pcb {
         for pad in &fp.pads {
-            if pad.net_code != 0 && !pad.net_name.is_empty() {
+            if !pad.net_name.is_empty() {
                 let key = (comp_key.clone(), pad.pad_number.clone());
                 pcb_pad_to_net.insert(key.clone(), pad.net_name.clone());
                 pcb_net_to_pads.entry(pad.net_name.clone()).or_default().insert(key);
@@ -216,14 +243,48 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
         }
     }
 
+    // Check nc-pad-connected
+    for comp in &ir.components {
+        for pad in &comp.pads {
+            if pad.etype == "no_connect" {
+                let key = (comp.identity_key.clone(), pad.pad_number.clone());
+                if let Some(net) = pcb_pad_to_net.get(&key) {
+                    if !net.is_empty() && net != "<unconnected>" {
+                        diags.push(Diagnostic {
+                            stage: "equiv".into(),
+                            code: "nc-pad-connected".into(),
+                            severity: "error".into(),
+                            location: None,
+                            subject: Subject {
+                                kind: "pad".into(),
+                                name: Some(format!("{}.{}", comp.refdes, pad.pad_number)),
+                                path: Some(format!("{}.{}", comp.path, pad.pad_number)),
+                                id: Some(comp.identity_key.clone()),
+                                ref_des: Some(comp.refdes.clone()),
+                                pad: Some(pad.pad_number.clone()),
+                            },
+                            related: vec![],
+                            expected: Some(serde_json::json!("<unconnected>")),
+                            actual: Some(serde_json::json!(net)),
+                            fix: Some(format!("Disconnect pad {}.{} from net '{}' on PCB", comp.refdes, pad.pad_number, net)),
+                            message: format!("No-connect pad {}.{} is connected to net '{}' on PCB", comp.refdes, pad.pad_number, net),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     // 2. Map IR nets to pad sets
     for ir_net in &ir.nets {
         let mut ir_pad_set: HashSet<(String, String)> = HashSet::new();
+        let mut ir_display_pads: BTreeSet<String> = BTreeSet::new();
+
         for pad in &ir_net.pads {
-            // Find component by path or ref
             let comp_opt = ir.components.iter().find(|c| c.path == pad.component_path || c.refdes == pad.component_ref);
             if let Some(comp) = comp_opt {
                 ir_pad_set.insert((comp.identity_key.clone(), pad.pad_number.clone()));
+                ir_display_pads.insert(format!("{}.{}", comp.refdes, pad.pad_number));
             }
         }
 
@@ -231,119 +292,159 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             continue;
         }
 
-        // Find which PCB nets these pads are connected to
-        let mut pcb_nets_involved: HashSet<String> = HashSet::new();
-        for pad_key in &ir_pad_set {
-            if let Some(net) = pcb_pad_to_net.get(pad_key) {
-                pcb_nets_involved.insert(net.clone());
-            } else {
-                // Pad not connected on PCB
-                pcb_nets_involved.insert("<unconnected>".into());
+        // Map each pad to its actual PCB net
+        let mut pad_actual_net: BTreeMap<String, String> = BTreeMap::new();
+        let mut net_counts: HashMap<String, usize> = HashMap::new();
+
+        for pad in &ir_net.pads {
+            let comp_opt = ir.components.iter().find(|c| c.path == pad.component_path || c.refdes == pad.component_ref);
+            if let Some(comp) = comp_opt {
+                let disp = format!("{}.{}", comp.refdes, pad.pad_number);
+                let actual = pcb_pad_to_net
+                    .get(&(comp.identity_key.clone(), pad.pad_number.clone()))
+                    .cloned()
+                    .unwrap_or_else(|| "<unconnected>".into());
+                *net_counts.entry(actual.clone()).or_default() += 1;
+                pad_actual_net.insert(disp, actual);
             }
         }
 
-        if pcb_nets_involved.len() == 1 {
-            let pcb_net_name = pcb_nets_involved.iter().next().unwrap();
-            if pcb_net_name == "<unconnected>" {
-                // Pads are all unconnected on PCB
-                let first_pad = ir_pad_set.iter().next().unwrap();
-                let comp = ir.components.iter().find(|c| c.identity_key == first_pad.0).unwrap();
+        // Determine primary PCB net: prefer one matching ir_net.name, else the one with most pads
+        let primary_pcb_net = if net_counts.contains_key(&ir_net.name) {
+            ir_net.name.clone()
+        } else {
+            net_counts.iter()
+                .filter(|(n, _)| n.as_str() != "<unconnected>")
+                .max_by_key(|(_, count)| *count)
+                .map(|(n, _)| n.clone())
+                .unwrap_or_else(|| "<unconnected>".into())
+        };
+
+        // Get actual pads on this primary PCB net
+        let mut pcb_display_pads: BTreeSet<String> = BTreeSet::new();
+        if primary_pcb_net != "<unconnected>" {
+            if let Some(pads) = pcb_net_to_pads.get(&primary_pcb_net) {
+                for (cid, pnum) in pads {
+                    if let Some(r) = comp_ref_by_id.get(cid) {
+                        pcb_display_pads.insert(format!("{}.{}", r, pnum));
+                    }
+                }
+            }
+        }
+
+        let missing_pads: Vec<String> = ir_display_pads.difference(&pcb_display_pads).cloned().collect();
+        let extra_pads: Vec<String> = pcb_display_pads.difference(&ir_display_pads).cloned().collect();
+
+        if missing_pads.is_empty() && extra_pads.is_empty() {
+            // Partition matches perfectly! Check net name
+            if primary_pcb_net != ir_net.name {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
-                    code: "net-partition-mismatch".into(),
+                    code: "net-name-mismatch".into(),
                     severity: "error".into(),
-                    location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                    location: None,
                     subject: Subject {
-                        kind: "pad".into(),
-                        name: Some(comp.refdes.clone()),
-                        path: Some(comp.path.clone()),
-                        id: Some(comp.identity_key.clone()),
-                        ref_des: Some(comp.refdes.clone()),
-                        pad: Some(first_pad.1.clone()),
+                        kind: "net".into(),
+                        name: Some(ir_net.name.clone()),
+                        path: None,
+                        id: None,
+                        ref_des: None,
+                        pad: None,
                     },
                     related: vec![],
                     expected: Some(serde_json::json!({ "net": ir_net.name })),
-                    actual: Some(serde_json::json!({ "net": "<unconnected>" })),
+                    actual: Some(serde_json::json!({ "net": primary_pcb_net })),
                     fix: None,
-                    message: format!("Pad in net '{}' is unconnected on PCB", ir_net.name),
+                    message: format!("Net partition matches, but net name differs (expected: {}, actual: {})", ir_net.name, primary_pcb_net),
                 });
-            } else {
-                let pcb_pads = pcb_net_to_pads.get(pcb_net_name).unwrap();
-                if &ir_pad_set == pcb_pads {
-                    // Perfect partition match!
-                    // Check net name
-                    if &ir_net.name != pcb_net_name {
-                        let first_pad = ir_pad_set.iter().next().unwrap();
-                        let comp = ir.components.iter().find(|c| c.identity_key == first_pad.0).unwrap();
-                        diags.push(Diagnostic {
-                            stage: "equiv".into(),
-                            code: "net-name-mismatch".into(),
-                            severity: "error".into(),
-                            location: SourceLocation { file: "".into(), line: 1, col: 1 },
-                            subject: Subject {
-                                kind: "net".into(),
-                                name: Some(comp.refdes.clone()),
-                                path: Some(comp.path.clone()),
-                                id: Some(comp.identity_key.clone()),
-                                ref_des: Some(comp.refdes.clone()),
-                                pad: Some(first_pad.1.clone()),
-                            },
-                            related: vec![],
-                            expected: Some(serde_json::json!({ "net": ir_net.name })),
-                            actual: Some(serde_json::json!({ "net": pcb_net_name })),
-                            fix: None,
-                            message: format!("Net partition matches, but net name differs (expected: {}, actual: {})", ir_net.name, pcb_net_name),
-                        });
-                    }
-                } else {
-                    // PCB net has different set of pads (partition mismatch)
-                    let first_pad = ir_pad_set.iter().next().unwrap();
-                    let comp = ir.components.iter().find(|c| c.identity_key == first_pad.0).unwrap();
-                    diags.push(Diagnostic {
-                        stage: "equiv".into(),
-                        code: "net-partition-mismatch".into(),
-                        severity: "error".into(),
-                        location: SourceLocation { file: "".into(), line: 1, col: 1 },
-                        subject: Subject {
-                            kind: "pad".into(),
-                            name: Some(comp.refdes.clone()),
-                            path: Some(comp.path.clone()),
-                            id: Some(comp.identity_key.clone()),
-                            ref_des: Some(comp.refdes.clone()),
-                            pad: Some(first_pad.1.clone()),
-                        },
-                        related: vec![],
-                        expected: Some(serde_json::json!({ "net": ir_net.name })),
-                        actual: Some(serde_json::json!({ "net": pcb_net_name })),
-                        fix: None,
-                        message: format!("Pad partition for net '{}' does not match PCB net '{}'", ir_net.name, pcb_net_name),
-                    });
-                }
             }
         } else {
-            // Pads belong to multiple PCB nets (partition mismatch)
-            let first_pad = ir_pad_set.iter().next().unwrap();
-            let comp = ir.components.iter().find(|c| c.identity_key == first_pad.0).unwrap();
-            let actual_nets: Vec<String> = pcb_nets_involved.into_iter().collect();
+            // Partition mismatch!
+            let mut related = Vec::new();
+            for mp in &missing_pads {
+                let actual = pad_actual_net.get(mp).cloned().unwrap_or_else(|| "<unconnected>".into());
+                related.push(Related {
+                    role: "missing-pad".into(),
+                    name: Some(format!("{} (connected to: {})", mp, actual)),
+                    location: None,
+                });
+            }
+            for ep in &extra_pads {
+                related.push(Related {
+                    role: "extra-pad".into(),
+                    name: Some(ep.clone()),
+                    location: None,
+                });
+            }
+
+            let mut msg_parts = Vec::new();
+            if !missing_pads.is_empty() {
+                msg_parts.push(format!("missing pads [{}]", missing_pads.join(", ")));
+            }
+            if !extra_pads.is_empty() {
+                msg_parts.push(format!("extra pads [{}]", extra_pads.join(", ")));
+            }
+
             diags.push(Diagnostic {
                 stage: "equiv".into(),
                 code: "net-partition-mismatch".into(),
                 severity: "error".into(),
-                location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                location: None,
                 subject: Subject {
-                    kind: "pad".into(),
-                    name: Some(comp.refdes.clone()),
-                    path: Some(comp.path.clone()),
-                    id: Some(comp.identity_key.clone()),
-                    ref_des: Some(comp.refdes.clone()),
-                    pad: Some(first_pad.1.clone()),
+                    kind: "net".into(),
+                    name: Some(ir_net.name.clone()),
+                    path: None,
+                    id: None,
+                    ref_des: None,
+                    pad: None,
                 },
-                related: vec![],
-                expected: Some(serde_json::json!({ "net": ir_net.name })),
-                actual: Some(serde_json::json!({ "nets": actual_nets })),
+                related,
+                expected: Some(serde_json::json!({ "net": ir_net.name, "pads": ir_display_pads })),
+                actual: Some(serde_json::json!({
+                    "primary_pcb_net": primary_pcb_net,
+                    "missing_pads": missing_pads,
+                    "extra_pads": extra_pads,
+                    "pad_connections": pad_actual_net,
+                })),
                 fix: None,
-                message: format!("Pads of {} expected on net {}, but split across multiple nets on PCB", comp.refdes, ir_net.name),
+                message: format!("Pad partition for net '{}' does not match PCB: {}", ir_net.name, msg_parts.join("; ")),
             });
+        }
+    }
+
+    // Check net-extra: PCB nets that contain matched pads but do not correspond to any IR net
+    let ir_net_names: HashSet<&str> = ir.nets.iter().map(|n| n.name.as_str()).collect();
+    let mut checked_pcb_nets: HashSet<String> = HashSet::new();
+    for (pcb_net_name, pads) in &pcb_net_to_pads {
+        if pcb_net_name == "<unconnected>" || pcb_net_name.is_empty() {
+            continue;
+        }
+        if !ir_net_names.contains(pcb_net_name.as_str()) {
+            let mut pad_list: Vec<String> = pads.iter()
+                .filter_map(|(cid, pnum)| comp_ref_by_id.get(cid).map(|r| format!("{}.{}", r, pnum)))
+                .collect();
+            pad_list.sort();
+            if pad_list.len() > 1 && checked_pcb_nets.insert(pcb_net_name.clone()) {
+                diags.push(Diagnostic {
+                    stage: "equiv".into(),
+                    code: "net-extra".into(),
+                    severity: "error".into(),
+                    location: None,
+                    subject: Subject {
+                        kind: "net".into(),
+                        name: Some(pcb_net_name.clone()),
+                        path: None,
+                        id: None,
+                        ref_des: None,
+                        pad: None,
+                    },
+                    related: vec![],
+                    expected: None,
+                    actual: Some(serde_json::json!({ "net": pcb_net_name, "pads": pad_list })),
+                    fix: Some(format!("Remove extra net '{}' from PCB or add to circuit description", pcb_net_name)),
+                    message: format!("Net '{}' on PCB does not exist in circuit description", pcb_net_name),
+                });
+            }
         }
     }
 
