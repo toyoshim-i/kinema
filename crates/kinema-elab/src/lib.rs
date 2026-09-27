@@ -100,5 +100,13 @@ endmodule
         assert_eq!(ir.nearby_groups.len(), 1);
         assert_eq!(ir.nearby_groups[0].hub_wire, "vcc_u1");
         assert_eq!(ir.nearby_groups[0].members.len(), 2); // U1_VCC, C1_A
+        assert_eq!(
+            ir.nearby_groups[0].pads.len(),
+            2,
+            "nearby group must only contain the 2 connected pads (U1.8 and C1.1), found: {:?}",
+            ir.nearby_groups[0].pads
+        );
+        assert!(ir.nearby_groups[0].pads.iter().any(|p| p.component_ref == "U1" && p.pad_number == "8"));
+        assert!(ir.nearby_groups[0].pads.iter().any(|p| p.component_ref == "C1" && p.pad_number == "1"));
     }
 }

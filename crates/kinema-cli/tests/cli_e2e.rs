@@ -30,6 +30,57 @@ fn test_cli_check_lint_json() {
 }
 
 #[test]
+fn test_cli_check_stage_fmt_clean() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "--stage", "fmt", "--json", "examples/timer_core.v"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(output.status.success(), "kinema check --stage fmt on clean file must exit 0: {:?}", String::from_utf8_lossy(&output.stderr));
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], true);
+}
+
+#[test]
+fn test_cli_check_stage_fmt_unformatted() {
+    let unformatted_path = get_workspace_root().join("target/unformatted_test.v");
+    std::fs::write(&unformatted_path, "module  bad_indent  () ;\nendmodule\n").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "--stage", "fmt", "--json", "target/unformatted_test.v"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(!output.status.success(), "kinema check --stage fmt on unformatted file must exit non-zero");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], false);
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(diags.iter().any(|d| d["stage"] == "fmt" && d["code"] == "not-formatted"));
+
+    let _ = std::fs::remove_file(unformatted_path);
+}
+
+#[test]
+fn test_cli_check_stage_drc_missing_board() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "--stage", "drc", "--json", "non_existent_board.kicad_pcb"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(!output.status.success(), "kinema check --stage drc on non-existent board must exit non-zero");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], false);
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(diags.iter().any(|d| d["stage"] == "drc" && d["code"] == "board-missing"));
+}
+
+#[test]
 fn test_cli_netlist_export() {
     let out_path = "target/cli_test_timer.net";
     let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
@@ -83,6 +134,21 @@ fn test_cli_graph() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
     assert_eq!(parsed["creator"], "kinema");
+
+    let top = &parsed["modules"]["timer_core"];
+    let netnames = &top["netnames"];
+    assert!(netnames.get("VCC").is_some(), "VCC net must exist in netnames");
+    assert!(netnames.get("GND").is_some(), "GND net must exist in netnames");
+
+    let u1_vcc_bits = &top["cells"]["U1"]["connections"]["VCC"];
+    let c1_a_bits = &top["cells"]["C1"]["connections"]["A"];
+    assert_eq!(u1_vcc_bits, c1_a_bits, "U1.VCC and C1.A must share the same bit ID for VCC net");
+
+    let u1_gnd_bits = &top["cells"]["U1"]["connections"]["GND"];
+    let c1_b_bits = &top["cells"]["C1"]["connections"]["B"];
+    assert_eq!(u1_gnd_bits, c1_b_bits, "U1.GND and C1.B must share the same bit ID for GND net");
+
+    assert_ne!(u1_vcc_bits, u1_gnd_bits, "VCC and GND must have distinct bit IDs");
 }
 
 #[test]

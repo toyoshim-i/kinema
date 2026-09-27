@@ -237,17 +237,59 @@ fn main() -> ExitCode {
 
             let mut all_diags = Vec::new();
 
-            // Run Lint stage
+            // 1. Parse stage only: already verified by load_source_files
+            if stage == Some(Stage::Parse) {
+                let report = LintReport::from_diagnostics(all_diags);
+                output_report(&report, json);
+                return ExitCode::SUCCESS;
+            }
+
+            // 2. Fmt stage
+            if stage.is_none() || stage == Some(Stage::Fmt) {
+                for path in &paths {
+                    if let Ok(content) = fs::read_to_string(path) {
+                        if let Ok(formatted) = format_str(&path.display().to_string(), &content) {
+                            if content != formatted {
+                                all_diags.push(Diagnostic {
+                                    stage: "fmt".into(),
+                                    code: "not-formatted".into(),
+                                    severity: "error".into(),
+                                    location: SourceLocation {
+                                        file: path.display().to_string(),
+                                        line: 1,
+                                        col: 1,
+                                    },
+                                    subject: Subject {
+                                        kind: "file".into(),
+                                        name: Some(path.display().to_string()),
+                                        path: None,
+                                        id: None,
+                                        ref_des: None,
+                                        pad: None,
+                                    },
+                                    related: vec![],
+                                    expected: None,
+                                    actual: None,
+                                    fix: Some(format!("Run 'kinema fmt {}' to format canonically", path.display())),
+                                    message: format!("File '{}' is not formatted canonically", path.display()),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Lint stage
             if stage.is_none() || stage == Some(Stage::Lint) {
                 let lint_report = lint_source_files(&source_files);
                 all_diags.extend(lint_report.diagnostics);
             }
 
-            // Run Equiv stage if requested or if stage is None and board exists
-            if stage == Some(Stage::Equiv) || (stage.is_none() && board_path.is_some()) {
-                if let Some(bp) = board_path {
+            // 4. Equiv stage
+            if stage == Some(Stage::Equiv) || (stage.is_none() && board_path.as_ref().is_some_and(|bp| bp.exists())) {
+                if let Some(bp) = &board_path {
                     if bp.exists() {
-                        match fs::read_to_string(&bp) {
+                        match fs::read_to_string(bp) {
                             Ok(content) => match parse_kicad_pcb(&content) {
                                 Ok(board) => match elaborate_sources(&source_files) {
                                     Ok(ir) => {
@@ -299,7 +341,54 @@ fn main() -> ExitCode {
                                 });
                             }
                         }
+                    } else if stage == Some(Stage::Equiv) {
+                        all_diags.push(Diagnostic {
+                            stage: "equiv".into(),
+                            code: "board-missing".into(),
+                            severity: "error".into(),
+                            location: SourceLocation { file: bp.display().to_string(), line: 1, col: 1 },
+                            subject: Subject { kind: "board".into(), name: Some(bp.display().to_string()), path: None, id: None, ref_des: None, pad: None },
+                            related: vec![],
+                            expected: None,
+                            actual: None,
+                            fix: Some("Specify an existing .kicad_pcb board file".into()),
+                            message: format!("Board file '{}' not found", bp.display()),
+                        });
                     }
+                } else if stage == Some(Stage::Equiv) {
+                    all_diags.push(Diagnostic {
+                        stage: "equiv".into(),
+                        code: "board-missing".into(),
+                        severity: "error".into(),
+                        location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                        subject: Subject { kind: "board".into(), name: None, path: None, id: None, ref_des: None, pad: None },
+                        related: vec![],
+                        expected: None,
+                        actual: None,
+                        fix: Some("Specify board file via kinema.toml or CLI argument".into()),
+                        message: "No board file configured for equivalence check".into(),
+                    });
+                }
+            }
+
+            // 5. DRC stage
+            if stage == Some(Stage::Drc) || (stage.is_none() && board_path.as_ref().is_some_and(|bp| bp.exists())) {
+                if let Some(bp) = &board_path {
+                    let drc_diags = run_kicad_drc(bp, stage == Some(Stage::Drc));
+                    all_diags.extend(drc_diags);
+                } else if stage == Some(Stage::Drc) {
+                    all_diags.push(Diagnostic {
+                        stage: "drc".into(),
+                        code: "board-missing".into(),
+                        severity: "error".into(),
+                        location: SourceLocation { file: "".into(), line: 1, col: 1 },
+                        subject: Subject { kind: "board".into(), name: None, path: None, id: None, ref_des: None, pad: None },
+                        related: vec![],
+                        expected: None,
+                        actual: None,
+                        fix: Some("Specify board file for DRC check".into()),
+                        message: "No board file configured for DRC check".into(),
+                    });
                 }
             }
 
@@ -461,26 +550,155 @@ fn output_report(report: &LintReport, json: bool) {
 fn generate_yosys_json(ir: &FlatNetlistIR) -> serde_json::Value {
     let mut modules = serde_json::Map::new();
     let mut cells = serde_json::Map::new();
+    let mut netnames = serde_json::Map::new();
+
+    // Map each net to a unique bit ID (starting at 2 for Yosys compatibility)
+    // and map (component_ref, port_name) -> bit_id
+    let mut pad_to_bit: std::collections::HashMap<(String, String), usize> = std::collections::HashMap::new();
+
+    for (idx, net) in ir.nets.iter().enumerate() {
+        let bit_id = idx + 2;
+        netnames.insert(
+            net.name.clone(),
+            serde_json::json!({
+                "hide_name": 0,
+                "bits": [bit_id],
+                "attributes": {}
+            }),
+        );
+        for pad in &net.pads {
+            pad_to_bit.insert((pad.component_ref.clone(), pad.port_name.clone()), bit_id);
+        }
+    }
 
     for comp in &ir.components {
         let mut conn = serde_json::Map::new();
+        let mut port_dirs = serde_json::Map::new();
+
         for pad in &comp.pads {
-            conn.insert(pad.port_name.clone(), serde_json::json!([pad.pad_number]));
+            if let Some(&bit_id) = pad_to_bit.get(&(comp.refdes.clone(), pad.port_name.clone())) {
+                conn.insert(pad.port_name.clone(), serde_json::json!([bit_id]));
+            } else {
+                conn.insert(pad.port_name.clone(), serde_json::json!([]));
+            }
+            port_dirs.insert(pad.port_name.clone(), serde_json::json!(&pad.etype));
         }
-        cells.insert(comp.refdes.clone(), serde_json::json!({
-            "type": comp.module_name,
-            "port_directions": {},
-            "connections": conn
-        }));
+
+        cells.insert(
+            comp.refdes.clone(),
+            serde_json::json!({
+                "type": comp.module_name,
+                "port_directions": port_dirs,
+                "connections": conn
+            }),
+        );
     }
 
-    modules.insert(ir.top_module.clone(), serde_json::json!({
-        "cells": cells,
-        "netnames": {}
-    }));
+    modules.insert(
+        ir.top_module.clone(),
+        serde_json::json!({
+            "cells": cells,
+            "netnames": netnames
+        }),
+    );
 
     serde_json::json!({
         "creator": "kinema",
         "modules": modules
     })
+}
+
+fn run_kicad_drc(board_path: &Path, is_explicit_stage: bool) -> Vec<Diagnostic> {
+    let mut diags = Vec::new();
+
+    if !board_path.exists() {
+        diags.push(Diagnostic {
+            stage: "drc".into(),
+            code: "board-missing".into(),
+            severity: "error".into(),
+            location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+            subject: Subject { kind: "board".into(), name: Some(board_path.display().to_string()), path: None, id: None, ref_des: None, pad: None },
+            related: vec![],
+            expected: None,
+            actual: None,
+            fix: Some("Ensure board file exists".into()),
+            message: format!("Board file '{}' not found for DRC check", board_path.display()),
+        });
+        return diags;
+    }
+
+    let temp_drc_json = std::env::temp_dir().join(format!("kinema_drc_{}.json", std::process::id()));
+    let status_res = std::process::Command::new("kicad-cli")
+        .args([
+            "pcb",
+            "drc",
+            "--format",
+            "json",
+            "-o",
+            &temp_drc_json.display().to_string(),
+            &board_path.display().to_string(),
+        ])
+        .output();
+
+    match status_res {
+        Ok(output) => {
+            if temp_drc_json.exists() {
+                if let Ok(content) = fs::read_to_string(&temp_drc_json) {
+                    if let Ok(json_val) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(violations) = json_val.get("violations").and_then(|v| v.as_array()) {
+                            for v in violations {
+                                let desc = v.get("description").and_then(|d| d.as_str()).unwrap_or("DRC violation");
+                                let v_type = v.get("type").and_then(|t| t.as_str()).unwrap_or("drc-violation");
+                                let severity = v.get("severity").and_then(|s| s.as_str()).unwrap_or("error");
+                                diags.push(Diagnostic {
+                                    stage: "drc".into(),
+                                    code: v_type.to_string(),
+                                    severity: if severity == "warning" { "warning".into() } else { "error".into() },
+                                    location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+                                    subject: Subject { kind: "board".into(), name: Some(board_path.display().to_string()), path: None, id: None, ref_des: None, pad: None },
+                                    related: vec![],
+                                    expected: None,
+                                    actual: None,
+                                    fix: None,
+                                    message: desc.to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+                let _ = fs::remove_file(temp_drc_json);
+            } else if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                diags.push(Diagnostic {
+                    stage: "drc".into(),
+                    code: "drc-error".into(),
+                    severity: "error".into(),
+                    location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+                    subject: Subject { kind: "board".into(), name: Some(board_path.display().to_string()), path: None, id: None, ref_des: None, pad: None },
+                    related: vec![],
+                    expected: None,
+                    actual: None,
+                    fix: None,
+                    message: format!("kicad-cli DRC failed: {}", stderr.trim()),
+                });
+            }
+        }
+        Err(e) => {
+            let severity = if is_explicit_stage { "error" } else { "warning" };
+            diags.push(Diagnostic {
+                stage: "drc".into(),
+                code: "kicad-cli-not-found".into(),
+                severity: severity.into(),
+                location: SourceLocation { file: board_path.display().to_string(), line: 1, col: 1 },
+                subject: Subject { kind: "tool".into(), name: Some("kicad-cli".into()), path: None, id: None, ref_des: None, pad: None },
+                related: vec![],
+                expected: None,
+                actual: None,
+                fix: Some("Install KiCad and ensure kicad-cli is on PATH".into()),
+                message: format!("kicad-cli could not be executed: {}", e),
+            });
+        }
+    }
+
+    diags
 }

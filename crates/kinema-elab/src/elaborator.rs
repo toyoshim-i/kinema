@@ -124,9 +124,9 @@ impl Elaborator {
 
         // Group pads by canonical net
         let mut nets_map: HashMap<String, Vec<ComponentPad>> = HashMap::new();
-        for (wire, pad) in raw_connections {
-            let canonical = resolve_canonical_net(&wire);
-            nets_map.entry(canonical).or_default().push(pad);
+        for (wire, pad) in &raw_connections {
+            let canonical = resolve_canonical_net(wire);
+            nets_map.entry(canonical).or_default().push(pad.clone());
         }
 
         let mut flat_nets = Vec::new();
@@ -160,15 +160,9 @@ impl Elaborator {
             }
 
             // Collect pads attached to members
-            for net in &flat_nets {
-                for pad in &net.pads {
-                    // Check if pad was directly connected to one of the member pin-wires
-                    for m in &members {
-                        if pad.port_name.contains(m) || m.contains(&pad.component_ref) {
-                            pads.push(pad.clone());
-                            break;
-                        }
-                    }
+            for (wire, pad) in &raw_connections {
+                if members.contains(wire) {
+                    pads.push(pad.clone());
                 }
             }
 

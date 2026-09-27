@@ -478,4 +478,68 @@ endmodule
             );
         }
     }
+
+    #[test]
+    fn test_lint_join_order_independence() {
+        let code = r#"
+module join (inout P, inout C); endmodule
+(* prefix = "U", footprint = "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" *)
+module leaf (
+    (* pad = "1", etype = "power_in" *) inout GND,
+    (* pad = "2", etype = "input" *) inout IN,
+    (* pad = "3", etype = "output" *) inout OUT,
+    (* pad = "4", etype = "input" *) inout EN,
+    (* pad = "5", etype = "input" *) inout NC1,
+    (* pad = "6", etype = "input" *) inout NC2,
+    (* pad = "7", etype = "input" *) inout NC3,
+    (* pad = "8", etype = "power_in", decouple = "required" *) inout VCC
+);
+endmodule
+(* prefix = "C", footprint = "Capacitor_SMD:C_0603_1608Metric" *)
+module C #(parameter value = "") (
+    (* pad = "1", etype = "passive" *) inout A,
+    (* pad = "2", etype = "passive" *) inout B
+);
+endmodule
+
+module top (
+    (* etype = "power_in" *) inout VCC,
+    (* etype = "power_in" *) inout GND,
+    (* etype = "input" *) inout SIG_IN,
+    (* etype = "output" *) inout SIG_OUT
+);
+    (* nearby *) wire vcc_u1;
+    wire u1_VCC;
+    wire c1_A;
+
+    // Component instances BEFORE joins!
+    leaf u1 (
+        .GND(GND),
+        .IN(SIG_IN),
+        .OUT(SIG_OUT),
+        .EN(VCC),
+        .NC1(),
+        .NC2(),
+        .NC3(),
+        .VCC(u1_VCC)
+    );
+    C #(.value("100n")) c1 (
+        .A(c1_A),
+        .B(GND)
+    );
+
+    // joins AFTER component instances!
+    join j_vcc_u1 (.P(VCC), .C(vcc_u1));
+    join j_u1_VCC (.P(vcc_u1), .C(u1_VCC));
+    join j_c1_A (.P(vcc_u1), .C(c1_A));
+endmodule
+"#;
+        let report = lint_str("test_order.v", code).expect("must parse");
+        let errors: Vec<_> = report.diagnostics.iter().filter(|d| d.severity == "error").collect();
+        assert!(
+            errors.is_empty(),
+            "Expected 0 errors when joins are placed after component instances, but got: {:?}",
+            errors
+        );
+    }
 }

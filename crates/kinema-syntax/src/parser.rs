@@ -921,6 +921,7 @@ impl<'a> Parser<'a> {
 }
 
 pub fn parse(file: &str, input: &str) -> Result<SourceFile, SyntaxError> {
+    let input = input.strip_prefix('\u{feff}').unwrap_or(input);
     let mut lexer = Lexer::new(file, input);
     let tokens = lexer.tokenize()?;
     let mut parser = Parser::new(file, tokens);

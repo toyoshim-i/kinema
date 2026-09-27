@@ -382,7 +382,65 @@ fn check_module(
     let mut joins_by_parent: HashMap<String, Vec<&Instance>> = HashMap::new();
     let mut join_edges: Vec<(String, String, &Instance)> = Vec::new(); // (child, parent, inst)
 
-    // Check instances
+    // Pass 1: Collect all join instances and validate join-name
+    for item in &module.items {
+        if let Item::Instance(inst) = item {
+            if inst.module_name == "join" {
+                // 21. join-name check: must be j_<C_wire>
+                let mut p_wire = None;
+                let mut c_wire = None;
+
+                for conn in &inst.connections {
+                    let w_name = conn.expr.as_ref().and_then(|e| match e {
+                        Expr::Ref(r) => Some(r.ident.clone()),
+                        _ => None,
+                    });
+                    if conn.port_name == "P" {
+                        p_wire = w_name;
+                    } else if conn.port_name == "C" {
+                        c_wire = w_name;
+                    }
+                }
+
+                if let Some(c) = &c_wire {
+                    let expected_name = format!("j_{}", c);
+                    if inst.instance_name != expected_name {
+                        diags.push(Diagnostic {
+                            stage: "lint".into(),
+                            code: "join-name".into(),
+                            severity: "error".into(),
+                            location: inst.span.to_location(),
+                            subject: Subject {
+                                kind: "join".into(),
+                                name: Some(inst.instance_name.clone()),
+                                path: Some(format!("{}.{}", module.name, inst.instance_name)),
+                                id: None,
+                                ref_des: None,
+                                pad: None,
+                            },
+                            related: vec![Related {
+                                role: "join-decl".into(),
+                                name: Some(inst.instance_name.clone()),
+                                location: Some(inst.span.to_location()),
+                            }],
+                            expected: Some(serde_json::json!(expected_name)),
+                            actual: Some(serde_json::json!(inst.instance_name.clone())),
+                            fix: Some(format!("Change join instance name to '{}'", expected_name)),
+                            message: format!("Join instance name must be '{}'", expected_name),
+                        });
+                    }
+                    joins_by_child.entry(c.clone()).or_default().push(inst);
+                }
+
+                if let (Some(p), Some(c)) = (&p_wire, &c_wire) {
+                    joins_by_parent.entry(p.clone()).or_default().push(inst);
+                    join_edges.push((c.clone(), p.clone(), inst));
+                }
+            }
+        }
+    }
+
+    // Pass 2: Check regular instances
     let mut seen_ids: HashMap<String, SourceLocation> = HashMap::new();
     let mut seen_refs: HashMap<String, SourceLocation> = HashMap::new();
     let mut net_pad_counts: HashMap<String, Vec<String>> = HashMap::new(); // net -> Vec<pad_desc>
@@ -391,6 +449,10 @@ fn check_module(
 
     for item in &module.items {
         if let Item::Instance(inst) = item {
+            if inst.module_name == "join" {
+                continue;
+            }
+
             // 29. duplicate-identity (id, ref)
             for attr in &inst.attrs {
                 if attr.key == "id" {
@@ -454,61 +516,6 @@ fn check_module(
                         }
                     }
                 }
-            }
-
-            if inst.module_name == "join" {
-                // 21. join-name check: must be j_<C_wire>
-                let mut p_wire = None;
-                let mut c_wire = None;
-
-                for conn in &inst.connections {
-                    let w_name = conn.expr.as_ref().and_then(|e| match e {
-                        Expr::Ref(r) => Some(r.ident.clone()),
-                        _ => None,
-                    });
-                    if conn.port_name == "P" {
-                        p_wire = w_name;
-                    } else if conn.port_name == "C" {
-                        c_wire = w_name;
-                    }
-                }
-
-                if let Some(c) = &c_wire {
-                    let expected_name = format!("j_{}", c);
-                    if inst.instance_name != expected_name {
-                        diags.push(Diagnostic {
-                            stage: "lint".into(),
-                            code: "join-name".into(),
-                            severity: "error".into(),
-                            location: inst.span.to_location(),
-                            subject: Subject {
-                                kind: "join".into(),
-                                name: Some(inst.instance_name.clone()),
-                                path: Some(format!("{}.{}", module.name, inst.instance_name)),
-                                id: None,
-                                ref_des: None,
-                                pad: None,
-                            },
-                            related: vec![Related {
-                                role: "join-decl".into(),
-                                name: Some(inst.instance_name.clone()),
-                                location: Some(inst.span.to_location()),
-                            }],
-                            expected: Some(serde_json::json!(expected_name)),
-                            actual: Some(serde_json::json!(inst.instance_name.clone())),
-                            fix: Some(format!("Change join instance name to '{}'", expected_name)),
-                            message: format!("Join instance name must be '{}'", expected_name),
-                        });
-                    }
-                    joins_by_child.entry(c.clone()).or_default().push(inst);
-                }
-
-                if let (Some(p), Some(c)) = (&p_wire, &c_wire) {
-                    joins_by_parent.entry(p.clone()).or_default().push(inst);
-                    join_edges.push((c.clone(), p.clone(), inst));
-                }
-
-                continue;
             }
 
             // Regular instance

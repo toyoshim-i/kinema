@@ -63,6 +63,14 @@ endmodule
     }
 
     #[test]
+    fn test_parse_with_utf8_bom() {
+        let code = "\u{feff}module foo (); endmodule\n";
+        let ast = parse("test_bom.v", code).expect("parsing with BOM should succeed");
+        assert_eq!(ast.modules.len(), 1);
+        assert_eq!(ast.modules[0].name, "foo");
+    }
+
+    #[test]
     fn test_parse_timer_core_example() {
         let path = std::path::Path::new("../../examples/timer_core.v");
         if path.exists() {
