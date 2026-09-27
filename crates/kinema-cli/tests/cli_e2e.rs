@@ -220,3 +220,90 @@ fn test_cli_check_normal_skip_note() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Board equivalence and DRC checks were skipped"));
 }
+
+#[test]
+fn test_cli_check_specified_board_missing() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "--json", "examples/timer_core.v", "nonexistent.kicad_pcb"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(!output.status.success(), "kinema check with nonexistent specified board must exit non-zero");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], false);
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(diags.iter().any(|d| d["code"] == "board-missing" && d["severity"] == "error"));
+}
+
+#[test]
+fn test_cli_check_matching_board() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args([
+            "check",
+            "--json",
+            "examples/timer_core.v",
+            "crates/kinema-equiv/tests/fixtures/timer_core_matching.kicad_pcb",
+        ])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(output.status.success(), "kinema check with matching board must exit 0: {:?}", String::from_utf8_lossy(&output.stderr));
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], true);
+    // Equiv stage diagnostics should contain no errors
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(!diags.iter().any(|d| d["stage"] == "equiv" && d["severity"] == "error"));
+}
+
+#[test]
+fn test_cli_check_misconnected_board() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args([
+            "check",
+            "--json",
+            "examples/timer_core.v",
+            "crates/kinema-equiv/tests/fixtures/timer_core_misconnected.kicad_pcb",
+        ])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(!output.status.success(), "kinema check with misconnected board must exit non-zero");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], false);
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(diags.iter().any(|d| d["code"] == "net-partition-mismatch" && d["severity"] == "error"));
+}
+
+#[test]
+fn test_cli_check_elab_error_duplicate_refdes() {
+    let bad_verilog = get_workspace_root().join("target/bad_dup_refdes.v");
+    std::fs::write(&bad_verilog, r#"
+module top ();
+    wire n1;
+    wire n2;
+    R R1 (.A(n1), .B(n2));
+    R R1 (.A(n1), .B(n2));
+endmodule
+"#).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["check", "--stage", "lint", "--json", "target/bad_dup_refdes.v"])
+        .output()
+        .expect("failed to execute kinema check");
+    assert!(!output.status.success(), "kinema check on duplicate refdes must exit non-zero");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).expect("output must be valid JSON");
+    assert_eq!(parsed["ok"], false);
+    let diags = parsed["diagnostics"].as_array().unwrap();
+    assert!(diags.iter().any(|d| d["stage"] == "lint" && d["code"] == "elab-error" && d["severity"] == "error"));
+
+    let _ = std::fs::remove_file(bad_verilog);
+}

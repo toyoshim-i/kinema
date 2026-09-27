@@ -246,41 +246,6 @@ fn main() -> ExitCode {
                 return ExitCode::SUCCESS;
             }
 
-            // In strict/signoff mode, board file is mandatory
-            if strict {
-                match &board_path {
-                    Some(bp) if !bp.exists() => {
-                        all_diags.push(Diagnostic {
-                            stage: "equiv".into(),
-                            code: "board-missing".into(),
-                            severity: "error".into(),
-                            location: Some(SourceLocation { file: bp.display().to_string(), line: 1, col: 1 }),
-                            subject: Subject { kind: "board".into(), name: Some(bp.display().to_string()), path: None, id: None, ref_des: None, pad: None },
-                            related: vec![],
-                            expected: None,
-                            actual: None,
-                            fix: Some("Ensure specified board file exists for strict sign-off verification".into()),
-                            message: format!("Board file '{}' not found in strict mode", bp.display()),
-                        });
-                    }
-                    None => {
-                        all_diags.push(Diagnostic {
-                            stage: "equiv".into(),
-                            code: "board-missing".into(),
-                            severity: "error".into(),
-                            location: None,
-                            subject: Subject { kind: "board".into(), name: None, path: None, id: None, ref_des: None, pad: None },
-                            related: vec![],
-                            expected: None,
-                            actual: None,
-                            fix: Some("Specify board file via kinema.toml or CLI argument for strict sign-off verification".into()),
-                            message: "Board file is required for strict/signoff verification mode".into(),
-                        });
-                    }
-                    _ => {}
-                }
-            }
-
             // 2. Fmt stage
             if stage.is_none() || stage == Some(Stage::Fmt) {
                 for path in &paths {
@@ -316,14 +281,30 @@ fn main() -> ExitCode {
                 }
             }
 
-            // 3. Lint stage
+            // 3. Lint stage (AST rules + Elaboration verification)
             if stage.is_none() || stage == Some(Stage::Lint) {
                 let lint_report = lint_source_files(&source_files);
                 all_diags.extend(lint_report.diagnostics);
+
+                // Run elaboration check to catch hierarchy, bus width, duplicate refdes, and IR validation errors
+                if let Err(e) = elaborate_sources(&source_files) {
+                    all_diags.push(Diagnostic {
+                        stage: "lint".into(),
+                        code: "elab-error".into(),
+                        severity: "error".into(),
+                        location: None,
+                        subject: Subject { kind: "circuit".into(), name: None, path: None, id: None, ref_des: None, pad: None },
+                        related: vec![],
+                        expected: None,
+                        actual: None,
+                        fix: None,
+                        message: format!("Elaboration error: {}", e),
+                    });
+                }
             }
 
             // 4. Equiv stage
-            let should_run_equiv = stage == Some(Stage::Equiv) || (stage.is_none() && (board_path.as_ref().is_some_and(|bp| bp.exists()) || strict));
+            let should_run_equiv = stage == Some(Stage::Equiv) || (stage.is_none() && (board_path.is_some() || strict));
             if should_run_equiv {
                 if let Some(bp) = &board_path {
                     if bp.exists() {
@@ -335,18 +316,21 @@ fn main() -> ExitCode {
                                         all_diags.extend(equiv_report.diagnostics);
                                     }
                                     Err(e) => {
-                                        all_diags.push(Diagnostic {
-                                            stage: "equiv".into(),
-                                            code: "elab-error".into(),
-                                            severity: "error".into(),
-                                            location: Some(SourceLocation { file: bp.display().to_string(), line: 1, col: 1 }),
-                                            subject: Subject { kind: "circuit".into(), name: None, path: None, id: None, ref_des: None, pad: None },
-                                            related: vec![],
-                                            expected: None,
-                                            actual: None,
-                                            fix: None,
-                                            message: format!("Elaboration error: {}", e),
-                                        });
+                                        // Only add diagnostic if not already reported in lint stage
+                                        if stage == Some(Stage::Equiv) {
+                                            all_diags.push(Diagnostic {
+                                                stage: "equiv".into(),
+                                                code: "elab-error".into(),
+                                                severity: "error".into(),
+                                                location: Some(SourceLocation { file: bp.display().to_string(), line: 1, col: 1 }),
+                                                subject: Subject { kind: "circuit".into(), name: None, path: None, id: None, ref_des: None, pad: None },
+                                                related: vec![],
+                                                expected: None,
+                                                actual: None,
+                                                fix: None,
+                                                message: format!("Elaboration error: {}", e),
+                                            });
+                                        }
                                     }
                                 },
                                 Err(e) => {
@@ -379,7 +363,7 @@ fn main() -> ExitCode {
                                 });
                             }
                         }
-                    } else if stage == Some(Stage::Equiv) && !strict {
+                    } else {
                         all_diags.push(Diagnostic {
                             stage: "equiv".into(),
                             code: "board-missing".into(),
@@ -389,11 +373,11 @@ fn main() -> ExitCode {
                             related: vec![],
                             expected: None,
                             actual: None,
-                            fix: Some("Specify an existing .kicad_pcb board file".into()),
+                            fix: Some("Ensure specified board file exists".into()),
                             message: format!("Board file '{}' not found", bp.display()),
                         });
                     }
-                } else if stage == Some(Stage::Equiv) && !strict {
+                } else {
                     all_diags.push(Diagnostic {
                         stage: "equiv".into(),
                         code: "board-missing".into(),
@@ -404,19 +388,19 @@ fn main() -> ExitCode {
                         expected: None,
                         actual: None,
                         fix: Some("Specify board file via kinema.toml or CLI argument".into()),
-                        message: "No board file configured for equivalence check".into(),
+                        message: "Board file is required for equivalence verification".into(),
                     });
                 }
             }
 
             // 5. DRC stage
-            let should_run_drc = stage == Some(Stage::Drc) || (stage.is_none() && (board_path.as_ref().is_some_and(|bp| bp.exists()) || strict));
+            let should_run_drc = stage == Some(Stage::Drc) || (stage.is_none() && (board_path.is_some() || strict));
             if should_run_drc {
                 if let Some(bp) = &board_path {
                     if bp.exists() {
                         let drc_diags = run_kicad_drc(bp, stage == Some(Stage::Drc) || strict);
                         all_diags.extend(drc_diags);
-                    } else if stage == Some(Stage::Drc) && !strict {
+                    } else {
                         all_diags.push(Diagnostic {
                             stage: "drc".into(),
                             code: "board-missing".into(),
@@ -426,11 +410,11 @@ fn main() -> ExitCode {
                             related: vec![],
                             expected: None,
                             actual: None,
-                            fix: Some("Specify an existing .kicad_pcb board file".into()),
-                            message: format!("Board file '{}' not found", bp.display()),
+                            fix: Some("Ensure specified board file exists".into()),
+                            message: format!("Board file '{}' not found for DRC check", bp.display()),
                         });
                     }
-                } else if stage == Some(Stage::Drc) && !strict {
+                } else {
                     all_diags.push(Diagnostic {
                         stage: "drc".into(),
                         code: "board-missing".into(),
@@ -441,7 +425,7 @@ fn main() -> ExitCode {
                         expected: None,
                         actual: None,
                         fix: Some("Specify board file for DRC check".into()),
-                        message: "No board file configured for DRC check".into(),
+                        message: "Board file is required for DRC verification".into(),
                     });
                 }
             }
@@ -452,7 +436,7 @@ fn main() -> ExitCode {
             let has_errors = report.diagnostics.iter().any(|d| d.severity == "error");
             let has_warnings = report.diagnostics.iter().any(|d| d.severity == "warning");
 
-            if !json && !has_errors && stage.is_none() && !strict && (board_path.is_none() || !board_path.as_ref().is_some_and(|bp| bp.exists())) {
+            if !json && !has_errors && stage.is_none() && !strict && board_path.is_none() {
                 println!("Note: Board equivalence and DRC checks were skipped because no board file was specified. Use --strict for complete sign-off verification.");
             }
 
