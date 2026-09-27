@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -10,7 +10,7 @@ pub enum ProjectError {
     Toml(PathBuf, Box<toml::de::Error>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectSection {
     pub name: Option<String>,
     #[serde(default)]
@@ -31,10 +31,51 @@ impl Default for ProjectSection {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct ProjectConfig {
-    #[serde(default)]
     pub project: ProjectSection,
+}
+
+#[derive(Deserialize)]
+struct RawProjectConfig {
+    #[serde(default)]
+    project: Option<ProjectSection>,
+    name: Option<String>,
+    #[serde(default)]
+    sources: Option<Vec<String>>,
+    #[serde(default)]
+    libraries: Option<Vec<String>>,
+    board: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for ProjectConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawProjectConfig::deserialize(deserializer)?;
+        let project = match raw.project {
+            Some(mut sec) => {
+                if sec.name.is_none() {
+                    sec.name = raw.name;
+                }
+                if sec.board.is_none() {
+                    sec.board = raw.board;
+                }
+                sec
+            }
+            None => {
+                let default = ProjectSection::default();
+                ProjectSection {
+                    name: raw.name.or(default.name),
+                    sources: raw.sources.unwrap_or(default.sources),
+                    libraries: raw.libraries.unwrap_or(default.libraries),
+                    board: raw.board.or(default.board),
+                }
+            }
+        };
+        Ok(ProjectConfig { project })
+    }
 }
 
 impl ProjectConfig {

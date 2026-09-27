@@ -34,7 +34,7 @@ Automated equivalence verification checks exact consistency between the circuit 
 - **Pad Partition Equivalence Verification**: Verifies that electrical pad-to-net assignments and pad connectivity partitions on the PCB match the circuit description (physical copper connectivity is verified via DRC).
 - **Comprehensive Static Linter**: 31 static design rules (29 errors, 2 warnings) with structured JSON diagnostics and deterministic fix suggestions.
 - **Strict Sign-Off Mode**: `kinema check --strict` (or `--signoff`) enforces all stages including board equivalence and KiCad DRC for manufacturing readiness.
-- **AI Agent Skill Ready**: Ships with a turnkey standalone agent skill (`SKILL.md`) for autonomous PCB design with Claude Code, Antigravity, Cursor, and Codex.
+- **AI Agent Skill Ready**: Ships with a turnkey standalone agent skill (`skills/kinema/SKILL.md`) for autonomous PCB design with Claude Code, Antigravity, Cursor, and Codex.
 
 ---
 
@@ -87,6 +87,8 @@ kinema --version
 Create a `kinema.toml` in your project root:
 
 ```toml
+[project]
+name = "kinema_project"
 sources = ["src/*.v", "examples/*.v"]
 libraries = ["lib/*.v"]
 board = "board.kicad_pcb"
@@ -147,7 +149,7 @@ module timer_core (
         .TRIG(TRIG),
         .OUT(OUT),
         .RESET(VCC),
-        .CTRL(),       // Explicit deliberate unconnetion
+        .CTRL(),       // Explicit deliberate disconnection
         .THR(TRIG),
         .DIS(DIS),
         .VCC(U1_VCC)
@@ -224,36 +226,36 @@ kinema gen-leaf ATmega328P --prefix U --footprint Package_QFP:TQFP-32_7x7mm_P0.8
 
 ## AI Agent Integration & Skill Configuration
 
-`kinema` is designed from the ground up for autonomous and pair-programming AI coding agents. A standalone agent skill is provided in [SKILL.md](file:///c:/Users/takas/Work/kinema/SKILL.md) (and `skills/kinema/SKILL.md`).
+`kinema` is designed from the ground up for autonomous and pair-programming AI coding agents. A standalone agent skill is provided in [skills/kinema/SKILL.md](file:///c:/Users/takas/Work/kinema/skills/kinema/SKILL.md).
 
 ### Registering the Skill in AI Agents
 
 #### 1. Claude Code / Anthropic Agent
-Place or symlink `SKILL.md` into your project skill directory:
+Place or symlink `skills/kinema/SKILL.md` into your project skill directory:
 ```bash
 mkdir -p .claude/skills/kinema
-cp SKILL.md .claude/skills/kinema/SKILL.md
+cp skills/kinema/SKILL.md .claude/skills/kinema/SKILL.md
 ```
 Or register globally in `~/.claude/skills/kinema-pcb-design/SKILL.md`.
 
 #### 2. Antigravity / Gemini CLI
-Copy `SKILL.md` to your user plugins/skills directory:
+Copy `skills/kinema/SKILL.md` to your user plugins/skills directory:
 ```bash
 mkdir -p ~/.gemini/antigravity/skills/kinema-pcb-design
-cp SKILL.md ~/.gemini/antigravity/skills/kinema-pcb-design/SKILL.md
+cp skills/kinema/SKILL.md ~/.gemini/antigravity/skills/kinema-pcb-design/SKILL.md
 ```
 
 #### 3. Cursor / Codex / Roo Code
-Include a reference to `SKILL.md` in your `.cursorrules` or project instructions:
+Include a reference to `skills/kinema/SKILL.md` in your `.cursorrules` or project instructions:
 ```markdown
 When designing or modifying circuits and PCB layouts in this repository:
-- Follow the rules and workflows defined in SKILL.md.
+- Follow the rules and workflows defined in skills/kinema/SKILL.md.
 - Ensure all changes pass `kinema check --json`.
 ```
 
 ### Prompting the Agent
 Simply tell your AI agent:
-> *"Design a 3.3V to 5V I2C level shifter circuit using kinema. Follow the workflow in SKILL.md."*
+> *"Design a 3.3V to 5V I2C level shifter circuit using kinema. Follow the workflow in skills/kinema/SKILL.md."*
 
 The agent will:
 1. Discuss component selection and verify leaf modules with you.
@@ -267,7 +269,7 @@ The agent will:
 
 ## Testing & Verification
 
-Run the complete test suite (45 unit and integration tests across all 7 crates):
+Run the complete test suite (115 unit and integration tests across all 7 crates):
 
 ```bash
 cargo test --workspace

@@ -128,4 +128,42 @@ endmodule
         let err2 = parse("test.v", code2).expect_err("literal constant must be rejected");
         assert!(err2.message.contains("Literal numbers and constants are not supported"));
     }
+
+    #[test]
+    fn test_project_config_standard_section() {
+        let toml_str = r#"
+[project]
+name = "my_custom_project"
+sources = ["src/top.v", "src/sub.v"]
+libraries = ["lib/custom.v"]
+board = "pcb/my_board.kicad_pcb"
+"#;
+        let config: ProjectConfig = toml::from_str(toml_str).expect("parse standard project config");
+        assert_eq!(config.project.name.as_deref(), Some("my_custom_project"));
+        assert_eq!(config.project.sources, vec!["src/top.v", "src/sub.v"]);
+        assert_eq!(config.project.libraries, vec!["lib/custom.v"]);
+        assert_eq!(config.project.board.as_deref(), Some("pcb/my_board.kicad_pcb"));
+    }
+
+    #[test]
+    fn test_project_config_flat_format() {
+        let toml_str = r#"
+name = "flat_project"
+sources = ["flat_src/*.v"]
+libraries = ["flat_lib/*.v"]
+board = "flat_board.kicad_pcb"
+"#;
+        let config: ProjectConfig = toml::from_str(toml_str).expect("parse flat project config");
+        assert_eq!(config.project.name.as_deref(), Some("flat_project"));
+        assert_eq!(config.project.sources, vec!["flat_src/*.v"]);
+        assert_eq!(config.project.libraries, vec!["flat_lib/*.v"]);
+        assert_eq!(config.project.board.as_deref(), Some("flat_board.kicad_pcb"));
+    }
+
+    #[test]
+    fn test_project_config_default_empty() {
+        let config: ProjectConfig = toml::from_str("").expect("parse empty project config");
+        let default_sec = ProjectSection::default();
+        assert_eq!(config.project, default_sec);
+    }
 }
