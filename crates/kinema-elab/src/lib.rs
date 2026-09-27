@@ -325,6 +325,141 @@ endmodule
         assert_eq!(sigb_net.pads.len(), 1);
         assert_eq!(sigb_net.pads[0].pad_number, "2");
     }
+
+    #[test]
+    fn test_ir_validation_dangling_pad() {
+        let ir = FlatNetlistIR {
+            top_module: "Top".into(),
+            components: vec![],
+            nets: vec![FlatNet {
+                name: "NET1".into(),
+                pads: vec![ComponentPad {
+                    component_path: "U1".into(),
+                    component_ref: "U1".into(),
+                    pad_number: "1".into(),
+                    port_name: "P".into(),
+                    etype: "passive".into(),
+                }],
+                width: None,
+                current: None,
+                netclass: None,
+                diffpair: None,
+            }],
+            nearby_groups: vec![],
+            join_nodes: vec![],
+        };
+        let err = ir.validate().expect_err("dangling pad must fail validation");
+        assert!(matches!(err, ElabError::DanglingPad(..)));
+    }
+
+    #[test]
+    fn test_ir_validation_pad_multi_net() {
+        let pad = ComponentPad {
+            component_path: "R1".into(),
+            component_ref: "R1".into(),
+            pad_number: "1".into(),
+            port_name: "A".into(),
+            etype: "passive".into(),
+        };
+        let ir = FlatNetlistIR {
+            top_module: "Top".into(),
+            components: vec![FlatComponent {
+                path: "R1".into(),
+                module_name: "R".into(),
+                identity_key: "r1".into(),
+                uuid: "uuid-r1".into(),
+                refdes: "R1".into(),
+                prefix: "R".into(),
+                footprint: "R_0603".into(),
+                mpn: None,
+                value: None,
+                dnp: false,
+                pads: vec![pad.clone()],
+            }],
+            nets: vec![
+                FlatNet {
+                    name: "NET_A".into(),
+                    pads: vec![pad.clone()],
+                    width: None,
+                    current: None,
+                    netclass: None,
+                    diffpair: None,
+                },
+                FlatNet {
+                    name: "NET_B".into(),
+                    pads: vec![pad],
+                    width: None,
+                    current: None,
+                    netclass: None,
+                    diffpair: None,
+                },
+            ],
+            nearby_groups: vec![],
+            join_nodes: vec![],
+        };
+        let err = ir.validate().expect_err("pad mapped to multiple nets must fail");
+        assert!(matches!(err, ElabError::PadMultiNet(..)));
+    }
+
+    #[test]
+    fn test_ir_validation_duplicate_ref() {
+        let ir = FlatNetlistIR {
+            top_module: "Top".into(),
+            components: vec![
+                FlatComponent {
+                    path: "R1a".into(),
+                    module_name: "R".into(),
+                    identity_key: "r1a".into(),
+                    uuid: "uuid-1".into(),
+                    refdes: "R1".into(),
+                    prefix: "R".into(),
+                    footprint: "R_0603".into(),
+                    mpn: None,
+                    value: None,
+                    dnp: false,
+                    pads: vec![],
+                },
+                FlatComponent {
+                    path: "R1b".into(),
+                    module_name: "R".into(),
+                    identity_key: "r1b".into(),
+                    uuid: "uuid-2".into(),
+                    refdes: "R1".into(),
+                    prefix: "R".into(),
+                    footprint: "R_0603".into(),
+                    mpn: None,
+                    value: None,
+                    dnp: false,
+                    pads: vec![],
+                },
+            ],
+            nets: vec![],
+            nearby_groups: vec![],
+            join_nodes: vec![],
+        };
+        let err = ir.validate().expect_err("duplicate refdes must fail");
+        assert!(matches!(err, ElabError::DuplicateRef(..)));
+    }
+
+    #[test]
+    fn test_ir_validation_invalid_constraint() {
+        let ir = FlatNetlistIR {
+            top_module: "Top".into(),
+            components: vec![],
+            nets: vec![FlatNet {
+                name: "PWR".into(),
+                pads: vec![],
+                width: Some("invalid_width".into()),
+                current: None,
+                netclass: None,
+                diffpair: None,
+            }],
+            nearby_groups: vec![],
+            join_nodes: vec![],
+        };
+        let err = ir.validate().expect_err("invalid width constraint must fail");
+        assert!(matches!(err, ElabError::InvalidConstraint(..)));
+    }
 }
 
 

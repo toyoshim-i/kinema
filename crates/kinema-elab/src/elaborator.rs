@@ -14,6 +14,22 @@ pub enum ElabError {
     JoinCycle(String),
     #[error("Duplicate reference designator '{0}'")]
     DuplicateRef(String),
+    #[error("Duplicate component UUID '{0}' on component '{1}'")]
+    DuplicateUuid(String, String),
+    #[error("Duplicate component path '{0}'")]
+    DuplicatePath(String),
+    #[error("Duplicate net '{0}' in flat netlist")]
+    DuplicateNet(String),
+    #[error("Duplicate pad number '{1}' on component '{0}'")]
+    DuplicatePadNumber(String, String),
+    #[error("Dangling pad '{1}.{2}' referenced in net '{0}'")]
+    DanglingPad(String, String, String),
+    #[error("Duplicate pad '{1}.{2}' in net '{0}'")]
+    DuplicatePadInNet(String, String, String),
+    #[error("Pad '{0}.{1}' connected to multiple nets: '{2}' and '{3}'")]
+    PadMultiNet(String, String, String, String),
+    #[error("Invalid constraint on net '{0}': {1}")]
+    InvalidConstraint(String, String),
     #[error("Elaboration failed: {0}")]
     Generic(String),
 }
@@ -214,13 +230,15 @@ impl Elaborator {
             });
         }
 
-        Ok(FlatNetlistIR {
+        let ir = FlatNetlistIR {
             top_module: top_name,
             components,
             nets: flat_nets,
             nearby_groups,
             join_nodes,
-        })
+        };
+        ir.validate()?;
+        Ok(ir)
     }
 
     #[allow(clippy::too_many_arguments)]
