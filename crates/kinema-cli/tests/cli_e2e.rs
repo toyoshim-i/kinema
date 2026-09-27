@@ -114,12 +114,23 @@ fn test_cli_ir_json() {
 
 #[test]
 fn test_cli_rules() {
+    let temp_dir = std::env::temp_dir();
+    let pro_file = temp_dir.join("test_rules.kicad_pro");
+    let dru_file = temp_dir.join("test_rules.kicad_dru");
     let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
         .current_dir(get_workspace_root())
-        .args(["rules"])
+        .args([
+            "rules",
+            "--pro",
+            pro_file.to_str().unwrap(),
+            "--dru",
+            dru_file.to_str().unwrap(),
+        ])
         .output()
         .expect("failed to execute kinema rules");
     assert!(output.status.success(), "kinema rules must exit 0: {:?}", String::from_utf8_lossy(&output.stderr));
+    let _ = std::fs::remove_file(pro_file);
+    let _ = std::fs::remove_file(dru_file);
 }
 
 #[test]

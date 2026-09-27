@@ -77,11 +77,14 @@ impl Elaborator {
         let mut net_attrs: HashMap<String, NetAttrTuple> = HashMap::new(); // width, current, netclass, diffpair
         let mut hub_wires: HashSet<String> = HashSet::new();
 
+        let project_ns = Uuid::new_v5(&Uuid::NAMESPACE_OID, top_name.as_bytes());
+
         self.elaborate_submodule(
             "",
             &top_module,
             &HashMap::new(),
             &HashMap::new(),
+            &project_ns,
             &mut components,
             &mut join_nodes,
             &mut raw_connections,
@@ -190,6 +193,7 @@ impl Elaborator {
         module: &ModuleDef,
         port_bindings: &HashMap<String, String>,
         _param_bindings: &HashMap<String, String>,
+        project_ns: &Uuid,
         components: &mut Vec<FlatComponent>,
         join_nodes: &mut Vec<JoinNode>,
         raw_connections: &mut Vec<(String, ComponentPad)>,
@@ -330,9 +334,9 @@ impl Elaborator {
                         self.allocate_next_ref(&prefix)
                     };
 
-                    // Deterministic identity key & UUID v5
+                    // Deterministic identity key & UUID v5 scoped by project namespace
                     let identity_key = id.clone().unwrap_or_else(|| inst_path.clone());
-                    let uuid = Uuid::new_v5(&Uuid::NAMESPACE_OID, identity_key.as_bytes()).to_string();
+                    let uuid = Uuid::new_v5(project_ns, identity_key.as_bytes()).to_string();
 
                     // Collect pads
                     let mut component_pads = Vec::new();
@@ -409,6 +413,7 @@ impl Elaborator {
                         &target_mod,
                         &sub_port_bindings,
                         &HashMap::new(),
+                        project_ns,
                         components,
                         join_nodes,
                         raw_connections,

@@ -109,4 +109,45 @@ endmodule
         assert!(ir.nearby_groups[0].pads.iter().any(|p| p.component_ref == "U1" && p.pad_number == "8"));
         assert!(ir.nearby_groups[0].pads.iter().any(|p| p.component_ref == "C1" && p.pad_number == "1"));
     }
+
+    #[test]
+    fn test_uuid_namespace_scoping() {
+        let src1 = r#"
+            (* prefix = "U", footprint = "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" *)
+            module Chip((* pad = "1" *) inout A);
+            endmodule
+
+            module ProjectA ();
+                wire sig;
+                (* id = "shared_id" *)
+                Chip u1(.A(sig));
+            endmodule
+        "#;
+
+        let src2 = r#"
+            (* prefix = "U", footprint = "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" *)
+            module Chip((* pad = "1" *) inout A);
+            endmodule
+
+            module ProjectB ();
+                wire sig;
+                (* id = "shared_id" *)
+                Chip u1(.A(sig));
+            endmodule
+        "#;
+
+        let ast1 = parse("a.kin", src1).expect("parse a");
+        let ir1_a = elaborate_source(&ast1).expect("elaborate a");
+        let ir1_b = elaborate_source(&ast1).expect("elaborate a again");
+
+        let ast2 = parse("b.kin", src2).expect("parse b");
+        let ir2 = elaborate_source(&ast2).expect("elaborate b");
+
+        // Deterministic within same project
+        assert_eq!(ir1_a.components[0].uuid, ir1_b.components[0].uuid);
+
+        // Different between different projects even with identical id
+        assert_ne!(ir1_a.components[0].uuid, ir2.components[0].uuid);
+    }
 }
+

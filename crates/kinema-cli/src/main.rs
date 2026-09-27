@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use kinema_elab::{elaborate_sources, FlatNetlistIR};
 use kinema_equiv::check_equivalence;
 use kinema_fmt::format_str;
-use kinema_kicad::{generate_kicad_dru, generate_kicad_netlist, generate_kicad_pro, parse_kicad_pcb};
+use kinema_kicad::{generate_kicad_dru, generate_kicad_netlist, merge_kicad_pro, parse_kicad_pcb};
 use kinema_lint::diagnostic::{Diagnostic, LintReport, Subject};
 use kinema_lint::lint_source_files;
 use kinema_syntax::ast::{SourceFile, SourceLocation};
@@ -473,14 +473,54 @@ fn main() -> ExitCode {
 
             match elaborate_sources(&source_files) {
                 Ok(ir) => {
-                    let pro_content = generate_kicad_pro(&ir);
+                    let project_dir = paths
+                        .first()
+                        .and_then(|p| p.parent())
+                        .unwrap_or(Path::new("."));
+
+                    // Determine pro_target: prefer specified pro, then existing *.kicad_pro, else <top_module>.kicad_pro
+                    let pro_target = if let Some(p) = pro {
+                        p
+                    } else {
+                        let mut found_pro = None;
+                        if let Ok(entries) = fs::read_dir(project_dir) {
+                            for entry in entries.flatten() {
+                                let path = entry.path();
+                                if path.extension().and_then(|ext| ext.to_str()) == Some("kicad_pro") {
+                                    found_pro = Some(path);
+                                    break;
+                                }
+                            }
+                        }
+                        found_pro.unwrap_or_else(|| {
+                            project_dir.join(format!("{}.kicad_pro", ir.top_module))
+                        })
+                    };
+
+                    let dru_target = if let Some(d) = dru {
+                        d
+                    } else {
+                        pro_target.with_extension("kicad_dru")
+                    };
+
+                    let existing_pro_content = fs::read_to_string(&pro_target).ok();
+                    let pro_content = match merge_kicad_pro(&ir, existing_pro_content.as_deref()) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("Failed to merge project file {}: {}", pro_target.display(), e);
+                            return ExitCode::from(1);
+                        }
+                    };
                     let dru_content = generate_kicad_dru(&ir);
 
-                    let pro_target = pro.unwrap_or_else(|| PathBuf::from("kinema.kicad_pro"));
-                    let dru_target = dru.unwrap_or_else(|| PathBuf::from("kinema.kicad_dru"));
-
-                    let _ = fs::write(&pro_target, pro_content);
-                    let _ = fs::write(&dru_target, dru_content);
+                    if let Err(e) = fs::write(&pro_target, pro_content) {
+                        eprintln!("Failed to write {}: {}", pro_target.display(), e);
+                        return ExitCode::from(1);
+                    }
+                    if let Err(e) = fs::write(&dru_target, dru_content) {
+                        eprintln!("Failed to write {}: {}", dru_target.display(), e);
+                        return ExitCode::from(1);
+                    }
 
                     println!("Generated rules:\n  {}\n  {}", pro_target.display(), dru_target.display());
                     ExitCode::SUCCESS

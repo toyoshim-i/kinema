@@ -340,8 +340,18 @@ Verifies that the `.kicad_pcb` layout is topologically and electrically equivale
 - `footprint-mismatch`: Footprint identifier differs.
 - `field-mismatch`: Value, MPN, or DNP status differs.
 - `ref-mismatch`: Fixed reference designator differs.
-- `net-partition-mismatch`: The mathematical partition of pads into equivalence classes differs between IR and board (short circuits or open circuits).
+- `nc-pad-connected`: Pad designated as NC or with `etype="no_connect"` is connected to a net on board.
+- `net-extra`: Net present on board with connected pads but not defined in Netlist IR.
+- `net-partition-mismatch`: The mathematical partition of pads into equivalence classes differs between IR and board (short circuits or open circuits). Reports exact missing and extra pads.
 - `net-name-mismatch`: Partition matches, but net name differs.
+
+> [!NOTE]
+> Equivalence diagnostics omit the `location` field since they compare physical board layout with netlist IR.
+> The following advanced equivalence checks are deferred to future milestones:
+> - `netclass-mismatch`: Board-level netclass assignment verification against IR `netclass` attribute.
+> - `rule-mismatch`: Board trace width / clearance verification against IR design rule attributes.
+> - `diffpair-mismatch`: Differential pair routing and polarity verification.
+
 
 ---
 
