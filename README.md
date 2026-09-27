@@ -226,7 +226,7 @@ kinema gen-leaf ATmega328P --prefix U --footprint Package_QFP:TQFP-32_7x7mm_P0.8
 
 ## AI Agent Integration & Skill Configuration
 
-`kinema` is designed from the ground up for autonomous and pair-programming AI coding agents. A standalone agent skill is provided in [skills/kinema/SKILL.md](file:///c:/Users/takas/Work/kinema/skills/kinema/SKILL.md).
+`kinema` is designed from the ground up for autonomous and pair-programming AI coding agents. A standalone agent skill is provided in [skills/kinema/SKILL.md](skills/kinema/SKILL.md).
 
 ### Registering the Skill in AI Agents
 
