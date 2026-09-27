@@ -460,6 +460,26 @@ endmodule
         let err = ir.validate().expect_err("invalid width constraint must fail");
         assert!(matches!(err, ElabError::InvalidConstraint(..)));
     }
+
+    #[test]
+    fn test_mutual_recursion_prevention() {
+        let code = r#"
+            module ModA ();
+                ModB b ();
+            endmodule
+
+            module ModB ();
+                ModA a ();
+            endmodule
+
+            module Top ();
+                ModA a ();
+            endmodule
+        "#;
+        let ast = parse("cycle.v", code).expect("parse");
+        let err = elaborate_source(&ast).expect_err("mutual recursion must fail elaboration");
+        assert!(matches!(err, ElabError::RecursiveInstance(..)), "Expected RecursiveInstance error, got: {:?}", err);
+    }
 }
 
 

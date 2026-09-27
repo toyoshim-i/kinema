@@ -30,6 +30,8 @@ pub enum ElabError {
     PadMultiNet(String, String, String, String),
     #[error("Invalid constraint on net '{0}': {1}")]
     InvalidConstraint(String, String),
+    #[error("Recursive module instantiation cycle detected: {0}")]
+    RecursiveInstance(String),
     #[error("Elaboration failed: {0}")]
     Generic(String),
 }
@@ -92,7 +94,8 @@ impl Elaborator {
         })?;
 
         // Pre-scan all explicit refs across the module tree to reserve them
-        self.prescan_refdes(&top_module);
+        let mut prescan_visited = HashSet::new();
+        self.prescan_refdes(&top_module, &mut prescan_visited);
 
         let mut components = Vec::new();
         let mut join_nodes = Vec::new();
@@ -102,6 +105,7 @@ impl Elaborator {
 
         let project_ns = Uuid::new_v5(&Uuid::NAMESPACE_OID, top_name.as_bytes());
 
+        let mut ancestor_stack = vec![top_module.name.clone()];
         self.elaborate_submodule(
             "",
             &top_module,
@@ -113,6 +117,7 @@ impl Elaborator {
             &mut raw_connections,
             &mut net_attrs,
             &mut hub_wires,
+            &mut ancestor_stack,
         )?;
 
         // Build Join Tree and resolve canonical net names
@@ -259,6 +264,7 @@ impl Elaborator {
         raw_connections: &mut Vec<(String, ComponentPad)>,
         net_attrs: &mut HashMap<String, NetAttrTuple>,
         hub_wires: &mut HashSet<String>,
+        ancestor_stack: &mut Vec<String>,
     ) -> Result<(), ElabError> {
         let resolve_ref_bits = |r: &RefExpr| -> Vec<String> {
             let mut result = Vec::new();
@@ -590,7 +596,14 @@ impl Elaborator {
                         }
                     }
 
-                    self.elaborate_submodule(
+                    if ancestor_stack.contains(&target_mod.name) {
+                        let mut cycle = ancestor_stack.clone();
+                        cycle.push(target_mod.name.clone());
+                        return Err(ElabError::RecursiveInstance(cycle.join(" -> ")));
+                    }
+
+                    ancestor_stack.push(target_mod.name.clone());
+                    let res = self.elaborate_submodule(
                         &inst_path,
                         &target_mod,
                         &sub_port_bindings,
@@ -601,7 +614,10 @@ impl Elaborator {
                         raw_connections,
                         net_attrs,
                         hub_wires,
-                    )?;
+                        ancestor_stack,
+                    );
+                    ancestor_stack.pop();
+                    res?;
                 }
             }
         }
@@ -628,7 +644,10 @@ impl Elaborator {
         None
     }
 
-    fn prescan_refdes(&mut self, module: &ModuleDef) {
+    fn prescan_refdes(&mut self, module: &ModuleDef, visited: &mut HashSet<String>) {
+        if !visited.insert(module.name.clone()) {
+            return;
+        }
         for item in &module.items {
             if let Item::Instance(inst) = item {
                 if inst.module_name == "join" {
@@ -649,7 +668,7 @@ impl Elaborator {
 
                 if let Some(target_mod) = self.modules.get(&inst.module_name).cloned() {
                     if !target_mod.items.is_empty() {
-                        self.prescan_refdes(&target_mod);
+                        self.prescan_refdes(&target_mod, visited);
                     }
                 }
             }
