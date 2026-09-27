@@ -375,6 +375,62 @@ impl<'a> Lexer<'a> {
                     "inout" => TokenKind::KwInout,
                     "wire" => TokenKind::KwWire,
                     "parameter" => TokenKind::KwParameter,
+                    "input" | "output" => {
+                        return Err(SyntaxError {
+                            message: format!("Keyword '{}' is not supported in kinema; all ports must be declared as 'inout' with (* etype = \"...\" *) attribute", ident),
+                            file: self.file.to_string(),
+                            line: start_line,
+                            col: start_col,
+                        });
+                    }
+                    "assign" => {
+                        return Err(SyntaxError {
+                            message: "Continuous assignment 'assign' is not supported in kinema; use structural wire declarations and join instances".to_string(),
+                            file: self.file.to_string(),
+                            line: start_line,
+                            col: start_col,
+                        });
+                    }
+                    "reg" | "logic" | "bit" | "integer" | "real" | "time" => {
+                        return Err(SyntaxError {
+                            message: format!("Type keyword '{}' is not supported in kinema; kinema is purely structural, only 'wire' is permitted", ident),
+                            file: self.file.to_string(),
+                            line: start_line,
+                            col: start_col,
+                        });
+                    }
+                    "always" | "always_comb" | "always_ff" | "always_latch" | "initial" => {
+                        return Err(SyntaxError {
+                            message: format!("Behavioral construct '{}' is not supported in kinema; kinema is a purely structural circuit description language", ident),
+                            file: self.file.to_string(),
+                            line: start_line,
+                            col: start_col,
+                        });
+                    }
+                    "generate" | "endgenerate" | "genvar" => {
+                        return Err(SyntaxError {
+                            message: format!("Generate block keyword '{}' is not supported in kinema", ident),
+                            file: self.file.to_string(),
+                            line: start_line,
+                            col: start_col,
+                        });
+                    }
+                    "defparam" => {
+                        return Err(SyntaxError {
+                            message: "Keyword 'defparam' is not supported in kinema; use instance parameter overrides '#(.PARAM(val))'".to_string(),
+                            file: self.file.to_string(),
+                            line: start_line,
+                            col: start_col,
+                        });
+                    }
+                    "function" | "endfunction" | "task" | "endtask" => {
+                        return Err(SyntaxError {
+                            message: format!("Keyword '{}' is not supported in kinema", ident),
+                            file: self.file.to_string(),
+                            line: start_line,
+                            col: start_col,
+                        });
+                    }
                     _ => TokenKind::Ident(ident),
                 };
                 line_has_tokens = true;
@@ -873,9 +929,17 @@ impl<'a> Parser<'a> {
         let mut index = None;
         let mut end_span = ident_span.clone();
         if self.match_token(&TokenKind::LBracket) {
-            let (int1, _) = self.expect_int_lit("integer literal")?;
+            let (int1, int1_span) = self.expect_int_lit("integer literal")?;
             if self.match_token(&TokenKind::Colon) {
                 let (int2, int2_span) = self.expect_int_lit("integer literal")?;
+                if int1 < int2 {
+                    return Err(SyntaxError {
+                        message: format!("Bit range slice must be descending [msb:lsb], found [{}:{}]", int1, int2),
+                        file: self.file.to_string(),
+                        line: int1_span.line,
+                        col: int1_span.col,
+                    });
+                }
                 let close_tok = self.expect(&TokenKind::RBracket, "']'")?;
                 end_span = close_tok.span;
                 index = Some(RefIndex::Range(int1, int2));
@@ -902,6 +966,15 @@ impl<'a> Parser<'a> {
 
     fn parse_expr(&mut self) -> Result<Expr, SyntaxError> {
         if self.match_token(&TokenKind::LBrace) {
+            if let TokenKind::IntLit(_) = &self.peek().kind {
+                let span = self.peek().span.clone();
+                return Err(SyntaxError {
+                    message: "Replication operator '{N{...}}' is not supported in kinema; use explicit concatenation '{sig, sig, ...}'".to_string(),
+                    file: self.file.to_string(),
+                    line: span.line,
+                    col: span.col,
+                });
+            }
             let mut refs = Vec::new();
             loop {
                 refs.push(self.parse_ref()?);
@@ -914,6 +987,15 @@ impl<'a> Parser<'a> {
             self.expect(&TokenKind::RBrace, "'}'")?;
             Ok(Expr::Concat(refs))
         } else {
+            if let TokenKind::IntLit(_) = &self.peek().kind {
+                let span = self.peek().span.clone();
+                return Err(SyntaxError {
+                    message: "Literal numbers and constants are not supported in port connections; connect to an explicit wire (e.g. 'GND', 'VCC') or leave unconnected with '.PORT()' to signify no connection".to_string(),
+                    file: self.file.to_string(),
+                    line: span.line,
+                    col: span.col,
+                });
+            }
             let r = self.parse_ref()?;
             Ok(Expr::Ref(r))
         }

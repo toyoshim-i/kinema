@@ -81,4 +81,51 @@ endmodule
             assert_eq!(ast.modules[1].name, "timer_core");
         }
     }
+
+    #[test]
+    fn test_disallow_assign_keyword() {
+        let code = "module foo (); wire a; wire b; assign a = b; endmodule";
+        let err = parse("test.v", code).expect_err("assign must be rejected");
+        assert!(err.message.contains("Continuous assignment 'assign' is not supported"));
+    }
+
+    #[test]
+    fn test_disallow_input_output_keywords() {
+        let code1 = "module foo (input a); endmodule";
+        let err1 = parse("test.v", code1).expect_err("input must be rejected");
+        assert!(err1.message.contains("Keyword 'input' is not supported"));
+
+        let code2 = "module foo (output a); endmodule";
+        let err2 = parse("test.v", code2).expect_err("output must be rejected");
+        assert!(err2.message.contains("Keyword 'output' is not supported"));
+    }
+
+    #[test]
+    fn test_disallow_reg_and_behavioral() {
+        let code1 = "module foo (); reg a; endmodule";
+        let err1 = parse("test.v", code1).expect_err("reg must be rejected");
+        assert!(err1.message.contains("Type keyword 'reg' is not supported"));
+
+        let code2 = "module foo (); always @* ; endmodule";
+        let err2 = parse("test.v", code2).expect_err("always must be rejected");
+        assert!(err2.message.contains("Behavioral construct 'always' is not supported"));
+    }
+
+    #[test]
+    fn test_disallow_ascending_slice() {
+        let code = "module foo (); wire [3:0] bus; R R1 (.A(bus[0:3])); endmodule";
+        let err = parse("test.v", code).expect_err("ascending slice must be rejected");
+        assert!(err.message.contains("Bit range slice must be descending"));
+    }
+
+    #[test]
+    fn test_disallow_replication_and_literal_constants() {
+        let code1 = "module foo (); wire sig; R R1 (.A({4{sig}})); endmodule";
+        let err1 = parse("test.v", code1).expect_err("replication must be rejected");
+        assert!(err1.message.contains("Replication operator"));
+
+        let code2 = "module foo (); R R1 (.A(0)); endmodule";
+        let err2 = parse("test.v", code2).expect_err("literal constant must be rejected");
+        assert!(err2.message.contains("Literal numbers and constants are not supported"));
+    }
 }
