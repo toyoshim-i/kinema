@@ -314,4 +314,67 @@ mod tests {
         let json_str = serde_json::to_string(&diag).unwrap();
         assert!(!json_str.contains("\"location\""), "JSON should not contain location when None: {}", json_str);
     }
+
+    #[test]
+    fn test_equiv_net_extra_single_pad() {
+        let ir = sample_ir();
+        let pcb_content = r#"
+(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
+    (tstamp "a3f9-uuid")
+    (property "Reference" "U1")
+    (property "Value" "NE555DR")
+    (property "mpn" "NE555DR")
+    (pad "7" smd rect (net "DIS"))
+    (pad "8" smd rect (net "SINGLE_EXTRA_NET"))
+  )
+  (footprint "Resistor_SMD:R_0603_1608Metric"
+    (tstamp "r1-uuid")
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "2" smd rect (net "DIS"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb_content).expect("parse pcb");
+        let report = check_equivalence(&ir, &board);
+        assert!(!report.ok);
+        assert!(
+            report.diagnostics.iter().any(|d| d.code == "net-extra" && d.message.contains("SINGLE_EXTRA_NET")),
+            "1-pad extra net must be detected as net-extra: {:?}",
+            report.diagnostics
+        );
+    }
+
+    #[test]
+    fn test_equiv_primary_pcb_net_deterministic_tiebreak() {
+        let ir = sample_ir();
+        // IR net DIS expects U1.7 and R1.2.
+        // On PCB, neither is on DIS. U1.7 is on NET_Z and R1.2 is on NET_A.
+        // Both have count 1. Deterministic selection must pick NET_A (alphabetical order).
+        let pcb_content = r#"
+(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
+    (tstamp "a3f9-uuid")
+    (property "Reference" "U1")
+    (property "Value" "NE555DR")
+    (property "mpn" "NE555DR")
+    (pad "7" smd rect (net "NET_Z"))
+  )
+  (footprint "Resistor_SMD:R_0603_1608Metric"
+    (tstamp "r1-uuid")
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "2" smd rect (net "NET_A"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb_content).expect("parse pcb");
+        for _ in 0..10 {
+            let report = check_equivalence(&ir, &board);
+            let diag = report.diagnostics.iter().find(|d| d.code == "net-partition-mismatch").unwrap();
+            let actual = diag.actual.as_ref().unwrap();
+            assert_eq!(actual["primary_pcb_net"], "NET_A", "Tied candidate nets must deterministically pick NET_A");
+        }
+    }
 }

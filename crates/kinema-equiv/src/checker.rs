@@ -309,14 +309,19 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             }
         }
 
-        // Determine primary PCB net: prefer one matching ir_net.name, else the one with most pads
+        // Determine primary PCB net: prefer one matching ir_net.name, else the one with most pads.
+        // Break ties deterministically by net name.
         let primary_pcb_net = if net_counts.contains_key(&ir_net.name) {
             ir_net.name.clone()
         } else {
-            net_counts.iter()
+            let mut candidates: Vec<(&String, &usize)> = net_counts
+                .iter()
                 .filter(|(n, _)| n.as_str() != "<unconnected>")
-                .max_by_key(|(_, count)| *count)
-                .map(|(n, _)| n.clone())
+                .collect();
+            candidates.sort_by(|(n1, c1), (n2, c2)| c2.cmp(c1).then_with(|| n1.cmp(n2)));
+            candidates
+                .first()
+                .map(|(n, _)| (*n).clone())
                 .unwrap_or_else(|| "<unconnected>".into())
         };
 
@@ -415,16 +420,20 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
     // Check net-extra: PCB nets that contain matched pads but do not correspond to any IR net
     let ir_net_names: HashSet<&str> = ir.nets.iter().map(|n| n.name.as_str()).collect();
     let mut checked_pcb_nets: HashSet<String> = HashSet::new();
-    for (pcb_net_name, pads) in &pcb_net_to_pads {
+    let mut sorted_pcb_net_names: Vec<String> = pcb_net_to_pads.keys().cloned().collect();
+    sorted_pcb_net_names.sort();
+
+    for pcb_net_name in sorted_pcb_net_names {
         if pcb_net_name == "<unconnected>" || pcb_net_name.is_empty() {
             continue;
         }
         if !ir_net_names.contains(pcb_net_name.as_str()) {
+            let pads = &pcb_net_to_pads[&pcb_net_name];
             let mut pad_list: Vec<String> = pads.iter()
                 .filter_map(|(cid, pnum)| comp_ref_by_id.get(cid).map(|r| format!("{}.{}", r, pnum)))
                 .collect();
             pad_list.sort();
-            if pad_list.len() > 1 && checked_pcb_nets.insert(pcb_net_name.clone()) {
+            if !pad_list.is_empty() && checked_pcb_nets.insert(pcb_net_name.clone()) {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
                     code: "net-extra".into(),
