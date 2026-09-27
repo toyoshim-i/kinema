@@ -5,14 +5,14 @@ description: Design, modify, and verify printed circuit boards (PCBs) in KiCad u
 
 # kinema PCB Design Guide
 
-Design printed circuit boards by writing circuit descriptions in a strict structural Verilog subset (`.v`) and validating them against KiCad PCB layouts using the `kinema` toolchain. Schematics are completely bypassed: the circuit description is the ground truth, and correctness is guaranteed by automated pad partition equivalence verification and DRC.
+Design printed circuit boards by writing circuit descriptions in a strict structural Verilog subset (`.v`) and validating them against KiCad PCB layouts using the `kinema` toolchain. Schematics are completely bypassed: the circuit description is the ground truth, and correctness of pad-to-net assignments is verified by automated pad partition equivalence verification, with physical copper connectivity verified by KiCad DRC.
 
 ---
 
 ## Core Principles & Commitments
 
 1. **Circuit Description is the Sole Ground Truth**: All electrical connectivity originates in `.v` files. Never manually reassign nets or pad numbers on the PCB layout.
-2. **Definition of Done is `kinema check` Passing**: Never claim a design is complete until `kinema check` exits with code 0 (all lint, equivalence, and DRC checks pass).
+2. **Definition of Done is `kinema check --strict` Passing**: Never claim a design is complete until `kinema check --strict` exits with code 0 (all lint, board pad-to-net equivalence, and DRC checks pass).
 3. **Verified Leaf Modules**: Only use component leaf modules that have been agreed upon with human review or verified from manufacturer datasheets. Never guess pinouts.
 4. **Human Review Gates**: Request human confirmation at defined checkpoints (Part Selection / Leaf Definition and Visual Schematic Review).
 5. **Loop Limit**: If an automated fix loop fails 5 times consecutively on the same issue, stop and ask the user for guidance.
@@ -100,7 +100,11 @@ When beginning a task, first inspect `kinema.toml`, `git log`, existing `.v` fil
 ### Stage 6: Verification
 Run the unified verification suite:
 ```bash
+# During iterative design (checks syntax, formatting, and static lint):
 kinema check --json
+
+# For manufacturing sign-off (requires board file, verifies pad equivalence and DRC):
+kinema check --strict --json
 ```
 
 Routing and remediation decision tree:

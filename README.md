@@ -4,7 +4,7 @@
 
 `kinema` is an offline hardware description toolchain written in Rust. It enables engineers and AI coding agents to design printed circuit boards (PCBs) by writing circuits in a **strict structural subset of Verilog**, bypassing graphical schematics entirely.
 
-Correctness is mathematically guaranteed through automated pad partition equivalence verification between the circuit description and the KiCad PCB layout.
+Automated equivalence verification checks exact consistency between the circuit description and the KiCad PCB layout's pad-to-net assignments and equivalence classes. Physical copper routing continuity and clearances are verified via KiCad DRC.
 
 ```
        Circuit Description (.v)
@@ -16,10 +16,11 @@ Correctness is mathematically guaranteed through automated pad partition equival
        KiCad Netlist (.net) ──► KiCad PCB Editor (Sync)
                                        │
                                        ▼
-                              Placement & Routing
+                               Placement & Routing
                                        │
                                        ▼
-  .kicad_pcb ◄──────────────► kinema equiv check
+  .kicad_pcb ◄──────────────► kinema check (--strict)
+                               (Equiv & KiCad DRC)
 ```
 
 ---
@@ -30,8 +31,9 @@ Correctness is mathematically guaranteed through automated pad partition equival
 - **Single-Binary Tooling in Rust**: No external heavy tool dependencies (such as Yosys or Python). Runs 100% offline.
 - **Fast Selective S-Expression Parser**: Parses KiCad board layouts (`.kicad_pcb`) by skipping geometry data (tracks, vias, zones) with parenthesis tracking, benchmarked at **~49 ms for a 10 MB PCB**.
 - **Deterministic Identity (UUID v5)**: Stable component tracking between circuit description and KiCad footprints using deterministic UUID v5.
-- **Pad Partition Equivalence Verification**: Mathematically verifies that electrical pad connectivity partitions on the PCB match the circuit description.
+- **Pad Partition Equivalence Verification**: Verifies that electrical pad-to-net assignments and pad connectivity partitions on the PCB match the circuit description (physical copper connectivity is verified via DRC).
 - **Comprehensive Static Linter**: 31 static design rules (29 errors, 2 warnings) with structured JSON diagnostics and deterministic fix suggestions.
+- **Strict Sign-Off Mode**: `kinema check --strict` (or `--signoff`) enforces all stages including board equivalence and KiCad DRC for manufacturing readiness.
 - **AI Agent Skill Ready**: Ships with a turnkey standalone agent skill (`SKILL.md`) for autonomous PCB design with Claude Code, Antigravity, Cursor, and Codex.
 
 ---

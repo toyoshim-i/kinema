@@ -6,7 +6,7 @@ September 2026 · @toyoshim
 
 ## 1. Overview and Design Principles
 
-**kinema** is a toolchain that enables designing printed circuit boards (PCBs) by writing circuits in a **strict structural subset of Verilog**. Instead of routing through KiCad's schematic editor, AI coding agents generate PCBs directly, and an offline Rust toolchain guarantees mathematical equivalence between the circuit description and the KiCad PCB layout. Schematics are treated merely as visual aids; the ultimate ground truth and correctness guarantee reside in automated equivalence checking.
+**kinema** is a toolchain that enables designing printed circuit boards (PCBs) by writing circuits in a **strict structural subset of Verilog**. Instead of routing through KiCad's schematic editor, AI coding agents generate PCBs directly, and an offline Rust toolchain verifies the equivalence of pad-to-net assignments and pad equivalence partitions between the circuit description and the KiCad PCB layout. Schematics are treated merely as visual aids; the ultimate ground truth resides in the HDL circuit description, and correctness of net-to-pad assignment and physical layout are verified by automated equivalence checking and KiCad DRC.
 
 The name **kinema** is derived from **Ki**Cad, **Ne**tlist, and Sche**ma**—signifying the bridge between KiCad PCB files, circuit descriptions as netlists, and the schema (language syntax and verification rules) that governs them. The CLI binary (`kinema`), the project configuration file (`kinema.toml`), and the AI agent skill (`kinema-pcb-design`) share this unified naming.
 
@@ -17,7 +17,7 @@ The name **kinema** is derived from **Ki**Cad, **Ne**tlist, and Sche**ma**—sig
 - For AI agents, structured text netlists are far easier to generate, inspect, diff, and verify than graphical schematics.
 
 ### 1.2 Design Principles
-1. **Correctness Guaranteed by Equivalence Verification**: Regardless of who (human or AI) performs placement and routing, a design is not complete until it passes automated equivalence checking.
+1. **Pad-to-Net Assignment Equivalence Verification**: Regardless of who (human or AI) performs placement and routing, a design is verified by automated pad equivalence checking against the circuit description, while physical copper continuity and design rules are verified via KiCad DRC.
 2. **Delegating Sync to KiCad Itself**: Rather than manipulating PCB tracks or net assignments incrementally via complex IPC APIs, the tool generates a native KiCad netlist (`.net`). KiCad’s internal netlist importer populates components and pad net assignments onto the board. The AI then performs component placement and track routing.
 3. **Minimal, Strict Language**: The grammar is a strict subset of structural Verilog with no Verilog behavioral semantics. There is exactly one canonical way to express any design, enforced strictly by an automated formatter.
 4. **Single-Binary Tooling in Rust**: No external heavy tool dependencies (such as Yosys or Python runtimes). Everything compiles into a fast, standalone binary.
@@ -321,7 +321,7 @@ In general, component pins connect directly to declared wires. Only pins partici
 
 ## 8. Equivalence Checker Specification (`kinema-equiv`)
 
-Verifies that the `.kicad_pcb` layout is topologically and electrically equivalent to the elaborated Netlist IR.
+Verifies that the `.kicad_pcb` layout's pad-to-net assignments and pad equivalence partitions match the elaborated Netlist IR. Note that physical copper tracks, vias, and zone connectivity are skipped by the fast parser and verified via KiCad DRC.
 
 ### 8.1 Selective S-expression Parser
 - Reads `.kicad_pcb` directly without running KiCad GUI or IPC.
@@ -342,7 +342,7 @@ Verifies that the `.kicad_pcb` layout is topologically and electrically equivale
 - `ref-mismatch`: Fixed reference designator differs.
 - `nc-pad-connected`: Pad designated as NC or with `etype="no_connect"` is connected to a net on board.
 - `net-extra`: Net present on board with connected pads but not defined in Netlist IR.
-- `net-partition-mismatch`: The mathematical partition of pads into equivalence classes differs between IR and board (short circuits or open circuits). Reports exact missing and extra pads.
+- `net-partition-mismatch`: The partition of pads into net equivalence classes differs between IR and board (short circuits or open circuits). Reports exact missing and extra pads.
 - `net-name-mismatch`: Partition matches, but net name differs.
 
 > [!NOTE]
@@ -387,7 +387,7 @@ Verifies that the `.kicad_pcb` layout is topologically and electrically equivale
 | Command | Usage | Description |
 | :--- | :--- | :--- |
 | `fmt` | `kinema fmt [FILES]... [--check]` | Formats source files to canonical form. |
-| `check` | `kinema check [--stage <STAGE>] [--json] [--deny-warnings] [FILES]...` | Runs verification pipeline (`parse`, `fmt`, `lint`, `equiv`, `drc`). |
+| `check` | `kinema check [--stage <STAGE>] [--strict] [--json] [--deny-warnings] [FILES]...` | Runs verification pipeline (`parse`, `fmt`, `lint`, `equiv`, `drc`). |
 | `ir` | `kinema ir [--json] [FILES]...` | Elaborates and outputs flat Netlist IR with nearby groups and join trees. |
 | `netlist` | `kinema netlist [-o <OUT>] [FILES]...` | Generates KiCad S-expression netlist (`.net`). |
 | `rules` | `kinema rules` | Generates `.kicad_pro` netclasses and `.kicad_dru` custom rules from width constraints. |
