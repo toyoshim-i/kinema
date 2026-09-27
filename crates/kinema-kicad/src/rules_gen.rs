@@ -68,6 +68,11 @@ pub fn merge_kicad_pro(ir: &FlatNetlistIR, existing_json: Option<&str>) -> Resul
                 .and_then(|w| {
                     if w.ends_with("mm") {
                         w.trim_end_matches("mm").parse::<f64>().ok()
+                    } else if w.ends_with("mil") {
+                        w.trim_end_matches("mil")
+                            .parse::<f64>()
+                            .ok()
+                            .map(|m| ((m * 0.0254) * 10000.0).round() / 10000.0)
                     } else {
                         None
                     }

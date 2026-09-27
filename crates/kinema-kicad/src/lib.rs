@@ -244,4 +244,31 @@ mod tests {
         assert!(patterns.iter().any(|p| p["netclass"] == "Power" && p["pattern"] == "VCC"));
         assert!(patterns.iter().any(|p| p["netclass"] == "Power" && p["pattern"] == "GND"));
     }
+
+    #[test]
+    fn test_merge_kicad_pro_with_mil_unit() {
+        let ir = FlatNetlistIR {
+            top_module: "test_mil".into(),
+            components: vec![],
+            nets: vec![
+                FlatNet {
+                    name: "RF_SIG".into(),
+                    pads: vec![],
+                    width: Some("10mil".into()),
+                    current: None,
+                    netclass: Some("HighSpeed".into()),
+                    diffpair: None,
+                },
+            ],
+            nearby_groups: vec![],
+            join_nodes: vec![],
+        };
+
+        let merged_json = merge_kicad_pro(&ir, None).expect("merge pro");
+        let parsed: serde_json::Value = serde_json::from_str(&merged_json).expect("valid json");
+
+        let classes = parsed["net_settings"]["classes"].as_array().expect("classes array");
+        let hs_class = classes.iter().find(|c| c["name"] == "HighSpeed").expect("HighSpeed class exists");
+        assert_eq!(hs_class["track_width"], 0.254, "10mil must be converted to 0.254mm");
+    }
 }
