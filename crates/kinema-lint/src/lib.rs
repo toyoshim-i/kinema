@@ -426,6 +426,20 @@ endmodule
     }
 
     #[test]
+    fn test_rule_constraint_conflict_across_join() {
+        let code = r#"
+module top ();
+    (* width = "0.5mm" *)
+    wire parent_wire;
+    (* width = "1.0mm" *)
+    wire child_wire;
+    join j_child (.P(parent_wire), .C(child_wire));
+endmodule
+"#;
+        check_rule_triggered(code, "constraint-conflict");
+    }
+
+    #[test]
     fn test_rule_single_pin_net() {
         let code = r#"
 (* prefix = "U" *)

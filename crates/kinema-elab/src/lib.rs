@@ -149,5 +149,183 @@ endmodule
         // Different between different projects even with identical id
         assert_ne!(ir1_a.components[0].uuid, ir2.components[0].uuid);
     }
+
+    #[test]
+    fn test_bus_bit_indexing_distinct_nets() {
+        let code = r#"
+            (* prefix = "R", footprint = "Resistor_SMD:R_0603_1608Metric" *)
+            module Resistor (
+                (* pad = "1", etype = "passive" *) inout A,
+                (* pad = "2", etype = "passive" *) inout B
+            );
+            endmodule
+
+            module Top ();
+                wire [1:0] bus;
+                Resistor R1 (
+                    .A(bus[0]),
+                    .B(bus[1])
+                );
+            endmodule
+        "#;
+
+        let ast = parse("top.kin", code).expect("parse");
+        let ir = elaborate_source(&ast).expect("elaborate");
+
+        assert_eq!(ir.components.len(), 1);
+        let comp = &ir.components[0];
+        assert_eq!(comp.refdes, "R1");
+
+        // bus[0] and bus[1] must be distinct nets!
+        let net_names: Vec<_> = ir.nets.iter().map(|n| n.name.as_str()).collect();
+        assert!(net_names.contains(&"bus[0]"), "ir.nets must contain bus[0], found: {:?}", net_names);
+        assert!(net_names.contains(&"bus[1]"), "ir.nets must contain bus[1], found: {:?}", net_names);
+    }
+
+    #[test]
+    fn test_auto_ref_allocation_collision_prevention() {
+        let code = r#"
+            (* prefix = "R", footprint = "Resistor_SMD:R_0603_1608Metric" *)
+            module Resistor (
+                (* pad = "1", etype = "passive" *) inout A,
+                (* pad = "2", etype = "passive" *) inout B
+            );
+            endmodule
+
+            module Top ();
+                wire a;
+                wire b;
+                wire c;
+                Resistor R1 (.A(a), .B(b));
+                Resistor spare (.A(b), .B(c));
+            endmodule
+        "#;
+
+        let ast = parse("top.kin", code).expect("parse");
+        let ir = elaborate_source(&ast).expect("elaborate");
+
+        assert_eq!(ir.components.len(), 2);
+        let refs: Vec<_> = ir.components.iter().map(|c| c.refdes.as_str()).collect();
+        assert!(refs.contains(&"R1"), "Must contain R1");
+        assert!(refs.contains(&"R2"), "spare must be allocated as R2 without colliding with R1, found: {:?}", refs);
+    }
+
+    #[test]
+    fn test_duplicate_refdes_error() {
+        let code = r#"
+            (* prefix = "R", footprint = "Resistor_SMD:R_0603_1608Metric" *)
+            module Resistor (
+                (* pad = "1", etype = "passive" *) inout A,
+                (* pad = "2", etype = "passive" *) inout B
+            );
+            endmodule
+
+            module Top ();
+                wire a;
+                wire b;
+                Resistor R1 (.A(a), .B(b));
+                (* ref = "R1" *)
+                Resistor other (.A(a), .B(b));
+            endmodule
+        "#;
+
+        let ast = parse("top.kin", code).expect("parse");
+        let err = elaborate_source(&ast).expect_err("Must fail due to duplicate R1 refdes");
+        match err {
+            ElabError::DuplicateRef(r) => assert_eq!(r, "R1"),
+            other => panic!("Expected DuplicateRef, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_default_parameter_value_preservation() {
+        let code = r#"
+            (* prefix = "R", footprint = "Resistor_SMD:R_0603_1608Metric" *)
+            module Resistor #(parameter value = "10k") (
+                (* pad = "1", etype = "passive" *) inout A,
+                (* pad = "2", etype = "passive" *) inout B
+            );
+            endmodule
+
+            module Top ();
+                wire a;
+                wire b;
+                wire c;
+                wire d;
+                Resistor R1 (.A(a), .B(b));
+                Resistor #(.value("22k")) R2 (.A(c), .B(d));
+            endmodule
+        "#;
+
+        let ast = parse("top.kin", code).expect("parse");
+        let ir = elaborate_source(&ast).expect("elaborate");
+
+        let r1 = ir.components.iter().find(|c| c.refdes == "R1").unwrap();
+        assert_eq!(r1.value.as_deref(), Some("10k"), "R1 must preserve default parameter value '10k'");
+
+        let r2 = ir.components.iter().find(|c| c.refdes == "R2").unwrap();
+        assert_eq!(r2.value.as_deref(), Some("22k"), "R2 must have overridden parameter value '22k'");
+    }
+
+    #[test]
+    fn test_port_attribute_and_join_constraint_inheritance() {
+        let code = r#"
+            (* prefix = "U", footprint = "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm" *)
+            module Chip (
+                (* pad = "1", etype = "power_in" *) inout VCC
+            );
+            endmodule
+
+            module Top (
+                (* width = "0.8mm", netclass = "Power" *) inout VCC
+            );
+                (* nearby, width = "0.6mm" *)
+                wire vcc_hub;
+                wire u1_vcc;
+
+                join j_hub (.P(VCC), .C(vcc_hub));
+                join j_u1 (.P(vcc_hub), .C(u1_vcc));
+
+                Chip U1 (.VCC(u1_vcc));
+            endmodule
+        "#;
+
+        let ast = parse("top.kin", code).expect("parse");
+        let ir = elaborate_source(&ast).expect("elaborate");
+
+        let vcc_net = ir.nets.iter().find(|n| n.name == "VCC").expect("find VCC net");
+        assert_eq!(vcc_net.width.as_deref(), Some("0.8mm"), "Must inherit width from port");
+        assert_eq!(vcc_net.netclass.as_deref(), Some("Power"), "Must inherit netclass from port");
+    }
+
+    #[test]
+    fn test_concat_port_connection() {
+        let code = r#"
+            (* prefix = "D", footprint = "Diode_SMD:D_SOD-123" *)
+            module DualDiode (
+                (* pad = "1,2", etype = "passive" *) inout [1:0] pins
+            );
+            endmodule
+
+            module Top ();
+                wire sigA;
+                wire sigB;
+                DualDiode D1 (.pins({sigA, sigB}));
+            endmodule
+        "#;
+
+        let ast = parse("top.kin", code).expect("parse");
+        let ir = elaborate_source(&ast).expect("elaborate");
+
+        let siga_net = ir.nets.iter().find(|n| n.name == "sigA").expect("find sigA");
+        let sigb_net = ir.nets.iter().find(|n| n.name == "sigB").expect("find sigB");
+
+        assert_eq!(siga_net.pads.len(), 1);
+        assert_eq!(siga_net.pads[0].pad_number, "1");
+        assert_eq!(sigb_net.pads.len(), 1);
+        assert_eq!(sigb_net.pads[0].pad_number, "2");
+    }
 }
+
+
 

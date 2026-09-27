@@ -555,6 +555,53 @@ fn check_module(
                 }
             }
 
+            let has_explicit_ref = inst.attrs.iter().any(|a| a.key == "ref");
+            if !has_explicit_ref {
+                if let Some(target_mod) = module_map.get(&inst.module_name).and_then(|v| v.first()) {
+                    let mut prefix = "U".to_string();
+                    for a in &target_mod.attrs {
+                        if a.key == "prefix" {
+                            if let Some(p) = &a.value {
+                                prefix = p.clone();
+                            }
+                        }
+                    }
+                    if inst.instance_name.starts_with(&prefix)
+                        && inst.instance_name.len() > prefix.len()
+                        && inst.instance_name[prefix.len()..].chars().all(|c| c.is_ascii_digit())
+                    {
+                        let ref_val = inst.instance_name.clone();
+                        if let Some(prev_loc) = seen_refs.get(&ref_val) {
+                            diags.push(Diagnostic {
+                                stage: "lint".into(),
+                                code: "duplicate-identity".into(),
+                                severity: "error".into(),
+                                location: Some(inst.span.to_location()),
+                                subject: Subject {
+                                    kind: "component".into(),
+                                    name: Some(inst.instance_name.clone()),
+                                    path: Some(format!("{}.{}", module.name, inst.instance_name)),
+                                    id: None,
+                                    ref_des: Some(ref_val.clone()),
+                                    pad: None,
+                                },
+                                related: vec![Related {
+                                    role: "previous-ref".into(),
+                                    name: Some(ref_val.clone()),
+                                    location: Some(prev_loc.clone()),
+                                }],
+                                expected: None,
+                                actual: None,
+                                fix: None,
+                                message: format!("Duplicate reference designator '{}'", ref_val),
+                            });
+                        } else {
+                            seen_refs.insert(ref_val, inst.span.to_location());
+                        }
+                    }
+                }
+            }
+
             // Regular instance
             // 10. recursive-instance
             if inst.module_name == module.name {
@@ -939,26 +986,70 @@ fn check_module(
                     }
 
                     // 2. width-mismatch
-                    let port_width = port.range.as_ref().map(|r| r.msb + 1).unwrap_or(1);
-                    let conn_width = match expr {
-                        Expr::Ref(r) => {
-                            if let Some(idx) = &r.index {
-                                match idx {
-                                    RefIndex::Single(_) => 1,
-                                    RefIndex::Range(msb, lsb) => msb - lsb + 1,
+                    let port_width = port.range.as_ref().map(|r| r.msb - r.lsb + 1).unwrap_or(1);
+                    let mut out_of_bounds = None;
+
+                    let get_ref_width = |r: &RefExpr, oob: &mut Option<String>| -> u32 {
+                        let declared_range = if let Some(w) = declared_wires.get(&r.ident) {
+                            w.range.as_ref().map(|rng| (rng.msb, rng.lsb))
+                        } else if let Some(p) = declared_ports.get(&r.ident) {
+                            p.range.as_ref().map(|rng| (rng.msb, rng.lsb))
+                        } else {
+                            None
+                        };
+
+                        if let Some(idx) = &r.index {
+                            match idx {
+                                RefIndex::Single(i) => {
+                                    if let Some((msb, lsb)) = declared_range {
+                                        if *i < lsb || *i > msb {
+                                            *oob = Some(format!("Bit index [{}] out of bounds for net '{}' (declared [{}:{}])", i, r.ident, msb, lsb));
+                                        }
+                                    }
+                                    1
                                 }
-                            } else if let Some(w) = declared_wires.get(&r.ident) {
-                                w.range.as_ref().map(|rng| rng.msb + 1).unwrap_or(1)
-                            } else if let Some(p) = declared_ports.get(&r.ident) {
-                                p.range.as_ref().map(|rng| rng.msb + 1).unwrap_or(1)
-                            } else {
-                                1
+                                RefIndex::Range(msb, lsb) => {
+                                    if let Some((d_msb, d_lsb)) = declared_range {
+                                        if *msb > d_msb || *lsb < d_lsb {
+                                            *oob = Some(format!("Bit slice [{}:{}] out of bounds for net '{}' (declared [{}:{}])", msb, lsb, r.ident, d_msb, d_lsb));
+                                        }
+                                    }
+                                    if msb >= lsb { msb - lsb + 1 } else { 0 }
+                                }
                             }
+                        } else if let Some((msb, lsb)) = declared_range {
+                            msb - lsb + 1
+                        } else {
+                            1
                         }
-                        Expr::Concat(list) => list.len() as u32,
                     };
 
-                    if port_width != conn_width {
+                    let conn_width = match expr {
+                        Expr::Ref(r) => get_ref_width(r, &mut out_of_bounds),
+                        Expr::Concat(list) => list.iter().map(|r| get_ref_width(r, &mut out_of_bounds)).sum(),
+                    };
+
+                    if let Some(oob_msg) = out_of_bounds {
+                        diags.push(Diagnostic {
+                            stage: "lint".into(),
+                            code: "width-mismatch".into(),
+                            severity: "error".into(),
+                            location: Some(conn.span.to_location()),
+                            subject: Subject {
+                                kind: "pin".into(),
+                                name: Some(format!("{}.{}", inst.instance_name, port.name)),
+                                path: Some(format!("{}.{}.{}", module.name, inst.instance_name, port.name)),
+                                id: None,
+                                ref_des: None,
+                                pad: None,
+                            },
+                            related: vec![],
+                            expected: Some(serde_json::json!(port_width)),
+                            actual: Some(serde_json::json!(conn_width)),
+                            fix: None,
+                            message: oob_msg,
+                        });
+                    } else if port_width != conn_width {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
                             code: "width-mismatch".into(),
@@ -1065,43 +1156,73 @@ fn check_module(
     }
 
     // 24. constraint-conflict check
-    let mut net_widths: HashMap<String, Vec<(String, SourceLocation)>> = HashMap::new();
-    for item in &module.items {
-        if let Item::Wire(wire) = item {
-            for attr in &wire.attrs {
-                if attr.key == "width" {
-                    if let Some(val) = &attr.value {
-                        net_widths.entry(wire.name.clone()).or_default().push((val.clone(), attr.span.to_location()));
-                    }
+    let resolve_canonical = |mut w: String| -> String {
+        let mut visited = HashSet::new();
+        visited.insert(w.clone());
+        while let Some(parent) = parent_map.get(&w) {
+            if visited.contains(parent) {
+                break;
+            }
+            w = parent.clone();
+            visited.insert(w.clone());
+        }
+        w
+    };
+
+    let mut net_constraints: HashMap<String, HashMap<String, Vec<(String, SourceLocation)>>> = HashMap::new();
+
+    let mut collect_constraints = |name: &str, attrs: &[Attr]| {
+        let canonical = resolve_canonical(name.to_string());
+        for attr in attrs {
+            if attr.key == "width" || attr.key == "current" || attr.key == "netclass" {
+                if let Some(val) = &attr.value {
+                    net_constraints
+                        .entry(canonical.clone())
+                        .or_default()
+                        .entry(attr.key.clone())
+                        .or_default()
+                        .push((val.clone(), attr.span.to_location()));
                 }
             }
         }
+    };
+
+    for port in &module.ports {
+        collect_constraints(&port.name, &port.attrs);
     }
-    for (net_name, widths) in &net_widths {
-        if widths.len() > 1 && widths.windows(2).any(|w| w[0].0 != w[1].0) {
-            diags.push(Diagnostic {
-                stage: "lint".into(),
-                code: "constraint-conflict".into(),
-                severity: "error".into(),
-                location: Some(widths[1].1.clone()),
-                subject: Subject {
-                    kind: "net".into(),
-                    name: Some(net_name.clone()),
-                    path: Some(format!("{}.{}", module.name, net_name)),
-                    id: None,
-                    ref_des: None,
-                    pad: None,
-                },
-                related: vec![Related {
-                    role: "conflicting-width".into(),
-                    name: Some(widths[0].0.clone()),
-                    location: Some(widths[0].1.clone()),
-                }],
-                expected: None,
-                actual: None,
-                fix: Some("Unify width constraints on net '{}'".into()),
-                message: format!("Conflicting width constraints specified for net '{}'", net_name),
-            });
+    for item in &module.items {
+        if let Item::Wire(w) = item {
+            collect_constraints(&w.name, &w.attrs);
+        }
+    }
+
+    for (canonical_net, kind_map) in &net_constraints {
+        for (kind, vals) in kind_map {
+            if vals.len() > 1 && vals.windows(2).any(|w| w[0].0 != w[1].0) {
+                diags.push(Diagnostic {
+                    stage: "lint".into(),
+                    code: "constraint-conflict".into(),
+                    severity: "error".into(),
+                    location: Some(vals[1].1.clone()),
+                    subject: Subject {
+                        kind: "net".into(),
+                        name: Some(canonical_net.clone()),
+                        path: Some(format!("{}.{}", module.name, canonical_net)),
+                        id: None,
+                        ref_des: None,
+                        pad: None,
+                    },
+                    related: vec![Related {
+                        role: format!("conflicting-{}", kind),
+                        name: Some(vals[0].0.clone()),
+                        location: Some(vals[0].1.clone()),
+                    }],
+                    expected: None,
+                    actual: None,
+                    fix: Some(format!("Unify {} constraints on net '{}'", kind, canonical_net)),
+                    message: format!("Conflicting {} constraints specified for net '{}'", kind, canonical_net),
+                });
+            }
         }
     }
 
