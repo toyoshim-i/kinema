@@ -636,4 +636,65 @@ endmodule
         assert!(!report.ok);
         assert!(report.diagnostics.iter().any(|d| d.code == "footprint-missing"), "Nope:DoesNotExist must report footprint-missing: {:?}", report.diagnostics);
     }
+
+    #[test]
+    fn test_rule_mutual_recursion() {
+        let code = r#"
+module A ();
+    B inst_b ();
+endmodule
+module B ();
+    A inst_a ();
+endmodule
+"#;
+        let report = lint_str("test.v", code).expect("must parse");
+        assert!(!report.ok);
+        let rec_diags: Vec<_> = report.diagnostics.iter().filter(|d| d.code == "recursive-instance").collect();
+        assert!(!rec_diags.is_empty(), "Expected recursive-instance diagnostic for mutual recursion: {:?}", report.diagnostics);
+        assert!(rec_diags.iter().any(|d| d.message.contains("A -> B -> A") || d.message.contains("B -> A -> B")));
+    }
+
+    #[test]
+    fn test_rule_power_conflict_across_join() {
+        let code = r#"
+module join (inout P, inout C); endmodule
+(* prefix = "U" *)
+module pwr_source (
+    (* pad = "1", etype = "power_out" *) inout OUT
+);
+endmodule
+module top ();
+    wire vcc_main;
+    wire w1;
+    wire w2;
+    pwr_source u1 (.OUT(w1));
+    pwr_source u2 (.OUT(w2));
+    join j_w1 (.P(vcc_main), .C(w1));
+    join j_w2 (.P(vcc_main), .C(w2));
+endmodule
+"#;
+        check_rule_triggered(code, "power-conflict");
+    }
+
+    #[test]
+    fn test_rule_undriven_net_across_join() {
+        let code = r#"
+module join (inout P, inout C); endmodule
+(* prefix = "U" *)
+module receiver (
+    (* pad = "1", etype = "input" *) inout IN
+);
+endmodule
+module top ();
+    wire bus_sig;
+    wire w1;
+    wire w2;
+    receiver u1 (.IN(w1));
+    receiver u2 (.IN(w2));
+    join j_w1 (.P(bus_sig), .C(w1));
+    join j_w2 (.P(bus_sig), .C(w2));
+endmodule
+"#;
+        check_rule_triggered(code, "undriven-net");
+    }
 }

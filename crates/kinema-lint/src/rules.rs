@@ -139,6 +139,39 @@ pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
     diags
 }
 
+fn find_module_cycle<'a>(
+    curr: &'a str,
+    target: &'a str,
+    module_map: &'a HashMap<String, Vec<&ModuleDef>>,
+    visited: &mut HashSet<&'a str>,
+    path: &mut Vec<&'a str>,
+) -> bool {
+    if curr == target {
+        path.push(target);
+        return true;
+    }
+    if !visited.insert(curr) {
+        return false;
+    }
+    path.push(curr);
+    if let Some(target_mods) = module_map.get(curr) {
+        if let Some(m) = target_mods.first() {
+            for item in &m.items {
+                if let Item::Instance(child_inst) = item {
+                    if child_inst.module_name == "join" {
+                        continue;
+                    }
+                    if find_module_cycle(&child_inst.module_name, target, module_map, visited, path) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    path.pop();
+    false
+}
+
 fn check_module(
     module: &ModuleDef,
     module_map: &HashMap<String, Vec<&ModuleDef>>,
@@ -477,10 +510,70 @@ fn check_module(
         }
     }
 
+    // 20. join-cycle check
+    let mut parent_map: HashMap<String, String> = HashMap::new();
+    for (child, parent, inst) in &join_edges {
+        let mut curr = parent.clone();
+        let mut cycle_detected = false;
+        let mut cycle_path = vec![curr.clone()];
+
+        while let Some(next) = parent_map.get(&curr) {
+            if next == child {
+                cycle_detected = true;
+                cycle_path.push(next.clone());
+                break;
+            }
+            cycle_path.push(next.clone());
+            curr = next.clone();
+        }
+
+        if cycle_detected {
+            diags.push(Diagnostic {
+                stage: "lint".into(),
+                code: "join-cycle".into(),
+                severity: "error".into(),
+                location: Some(inst.span.to_location()),
+                subject: Subject {
+                    kind: "join".into(),
+                    name: Some(inst.instance_name.clone()),
+                    path: Some(format!("{}.{}", module.name, inst.instance_name)),
+                    id: None,
+                    ref_des: None,
+                    pad: None,
+                },
+                related: vec![Related {
+                    role: "cycle".into(),
+                    name: Some(cycle_path.join(" -> ")),
+                    location: Some(inst.span.to_location()),
+                }],
+                expected: None,
+                actual: None,
+                fix: None,
+                message: format!("Join instance '{}' forms a cycle", inst.instance_name),
+            });
+        } else {
+            parent_map.insert(child.clone(), parent.clone());
+        }
+    }
+
+    let resolve_canonical = |mut w: String| -> String {
+        let mut visited = HashSet::new();
+        visited.insert(w.clone());
+        while let Some(parent) = parent_map.get(&w) {
+            if visited.contains(parent) {
+                break;
+            }
+            w = parent.clone();
+            visited.insert(w.clone());
+        }
+        w
+    };
+
     // Pass 2: Check regular instances
     let mut seen_ids: HashMap<String, SourceLocation> = HashMap::new();
     let mut seen_refs: HashMap<String, SourceLocation> = HashMap::new();
-    let mut net_pad_counts: HashMap<String, Vec<String>> = HashMap::new(); // net -> Vec<pad_desc>
+    let mut direct_pad_counts: HashMap<String, usize> = HashMap::new();
+    let mut net_pad_counts: HashMap<String, Vec<String>> = HashMap::new(); // canonical net -> Vec<pad_desc>
     let mut net_drivers: HashMap<String, usize> = HashMap::new();
     let mut net_power_outs: HashMap<String, Vec<SourceLocation>> = HashMap::new();
 
@@ -604,7 +697,35 @@ fn check_module(
 
             // Regular instance
             // 10. recursive-instance
-            if inst.module_name == module.name {
+            let is_direct_recursive = inst.module_name == module.name;
+            let mut cycle_path = Vec::new();
+            let is_indirect_recursive = if !is_direct_recursive {
+                let mut visited = HashSet::new();
+                find_module_cycle(&inst.module_name, &module.name, module_map, &mut visited, &mut cycle_path)
+            } else {
+                false
+            };
+
+            if is_direct_recursive || is_indirect_recursive {
+                let (related, msg) = if is_direct_recursive {
+                    (
+                        vec![],
+                        format!("Module '{}' recursively instantiates itself", module.name),
+                    )
+                } else {
+                    let full_path = format!("{} -> {}", module.name, cycle_path.join(" -> "));
+                    (
+                        vec![Related {
+                            role: "cycle".into(),
+                            name: Some(full_path.clone()),
+                            location: Some(inst.span.to_location()),
+                        }],
+                        format!(
+                            "Module '{}' recursively instantiates itself via cycle: {}",
+                            module.name, full_path
+                        ),
+                    )
+                };
                 diags.push(Diagnostic {
                     stage: "lint".into(),
                     code: "recursive-instance".into(),
@@ -618,11 +739,11 @@ fn check_module(
                         ref_des: None,
                         pad: None,
                     },
-                    related: vec![],
+                    related,
                     expected: None,
                     actual: None,
                     fix: None,
-                    message: format!("Module '{}' recursively instantiates itself", module.name),
+                    message: msg,
                 });
             }
 
@@ -894,9 +1015,12 @@ fn check_module(
                         }
 
                         // Collect drivers and nets
+                        *direct_pad_counts.entry(w.clone()).or_default() += 1;
+                        let canonical_w = resolve_canonical(w.clone());
+
                         if port_etype == "power_out" {
-                            net_power_outs.entry(w.clone()).or_default().push(conn.span.to_location());
-                            *net_drivers.entry(w.clone()).or_default() += 1;
+                            net_power_outs.entry(canonical_w.clone()).or_default().push(conn.span.to_location());
+                            *net_drivers.entry(canonical_w.clone()).or_default() += 1;
                         } else if port_etype == "output"
                             || port_etype == "bidirectional"
                             || port_etype == "power_in"
@@ -904,10 +1028,10 @@ fn check_module(
                             || port_etype == "open_emitter"
                             || port_etype == "tri_state"
                         {
-                            *net_drivers.entry(w.clone()).or_default() += 1;
+                            *net_drivers.entry(canonical_w.clone()).or_default() += 1;
                         }
 
-                        net_pad_counts.entry(w.clone()).or_default().push(format!("{}.{}", inst.instance_name, port.name));
+                        net_pad_counts.entry(canonical_w).or_default().push(format!("{}.{}", inst.instance_name, port.name));
 
                         // 16. pin-wire-name check if wire is joined to a hub
                         let is_hub_child = joins_by_child.contains_key(&w) && !hub_wires.contains_key(&w);
@@ -1075,55 +1199,9 @@ fn check_module(
         }
     }
 
-    // 20. join-cycle check
-    let mut parent_map: HashMap<String, String> = HashMap::new();
-    for (child, parent, inst) in &join_edges {
-        let mut curr = parent.clone();
-        let mut cycle_detected = false;
-        let mut cycle_path = vec![curr.clone()];
-
-        while let Some(next) = parent_map.get(&curr) {
-            if next == child {
-                cycle_detected = true;
-                cycle_path.push(next.clone());
-                break;
-            }
-            cycle_path.push(next.clone());
-            curr = next.clone();
-        }
-
-        if cycle_detected {
-            diags.push(Diagnostic {
-                stage: "lint".into(),
-                code: "join-cycle".into(),
-                severity: "error".into(),
-                location: Some(inst.span.to_location()),
-                subject: Subject {
-                    kind: "join".into(),
-                    name: Some(inst.instance_name.clone()),
-                    path: Some(format!("{}.{}", module.name, inst.instance_name)),
-                    id: None,
-                    ref_des: None,
-                    pad: None,
-                },
-                related: vec![Related {
-                    role: "cycle".into(),
-                    name: Some(cycle_path.join(" -> ")),
-                    location: Some(inst.span.to_location()),
-                }],
-                expected: None,
-                actual: None,
-                fix: None,
-                message: format!("Join instance '{}' forms a cycle", inst.instance_name),
-            });
-        } else {
-            parent_map.insert(child.clone(), parent.clone());
-        }
-    }
-
     // 15. pin-wire-shape check
     for wire_name in &pin_wires_used {
-        let pad_count = net_pad_counts.get(wire_name).map(|v| v.len()).unwrap_or(0);
+        let pad_count = direct_pad_counts.get(wire_name).copied().unwrap_or(0);
         let join_count = joins_by_child.get(wire_name).map(|v| v.len()).unwrap_or(0);
         if pad_count != 1 || join_count != 1 {
             let wire_decl = declared_wires.get(wire_name);
@@ -1156,19 +1234,6 @@ fn check_module(
     }
 
     // 24. constraint-conflict check
-    let resolve_canonical = |mut w: String| -> String {
-        let mut visited = HashSet::new();
-        visited.insert(w.clone());
-        while let Some(parent) = parent_map.get(&w) {
-            if visited.contains(parent) {
-                break;
-            }
-            w = parent.clone();
-            visited.insert(w.clone());
-        }
-        w
-    };
-
     let mut net_constraints: HashMap<String, HashMap<String, Vec<(String, SourceLocation)>>> = HashMap::new();
 
     let mut collect_constraints = |name: &str, attrs: &[Attr]| {
