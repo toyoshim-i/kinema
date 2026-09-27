@@ -71,21 +71,28 @@ impl<'a> PcbParser<'a> {
         self.skip_whitespace_and_comments();
         if self.peek_byte() == Some(b'"') {
             self.advance_byte();
-            let mut s = String::new();
+            let mut bytes = Vec::new();
             let mut escape = false;
             while let Some(b) = self.advance_byte() {
                 if escape {
-                    s.push(b as char);
+                    match b {
+                        b'n' => bytes.push(b'\n'),
+                        b'r' => bytes.push(b'\r'),
+                        b't' => bytes.push(b'\t'),
+                        b'\\' => bytes.push(b'\\'),
+                        b'"' => bytes.push(b'"'),
+                        _ => bytes.push(b),
+                    }
                     escape = false;
                 } else if b == b'\\' {
                     escape = true;
                 } else if b == b'"' {
                     break;
                 } else {
-                    s.push(b as char);
+                    bytes.push(b);
                 }
             }
-            s
+            String::from_utf8_lossy(&bytes).to_string()
         } else {
             let start = self.cursor;
             while let Some(b) = self.peek_byte() {
@@ -158,11 +165,18 @@ impl<'a> PcbParser<'a> {
 
             match tag.as_str() {
                 "net" => {
-                    let code_str = self.read_atom();
-                    let name = self.read_atom();
-                    self.skip_current_list(); // close (net ...)
-                    if let Ok(code) = code_str.parse::<usize>() {
-                        nets.insert(code, name);
+                    let first = self.read_atom();
+                    self.skip_whitespace_and_comments();
+                    if self.peek_byte() == Some(b')') {
+                        self.advance_byte();
+                        let code = nets.len() + 1;
+                        nets.insert(code, first);
+                    } else {
+                        let name = self.read_atom();
+                        self.skip_current_list();
+                        if let Ok(code) = first.parse::<usize>() {
+                            nets.insert(code, name);
+                        }
                     }
                 }
                 "footprint" | "module" => {
@@ -269,17 +283,28 @@ impl<'a> PcbParser<'a> {
                         self.advance_byte();
                         let sub_tag = self.read_atom();
                         if sub_tag == "net" {
-                            let c_str = self.read_atom();
-                            let n = self.read_atom();
-                            self.skip_current_list();
-                            if let Ok(c) = c_str.parse::<usize>() {
-                                net_code = c;
-                            }
-                            net_name = if n.is_empty() {
-                                net_lookup.get(&net_code).cloned().unwrap_or_default()
+                            let first = self.read_atom();
+                            self.skip_whitespace_and_comments();
+                            if self.peek_byte() == Some(b')') {
+                                self.advance_byte();
+                                if let Ok(c) = first.parse::<usize>() {
+                                    net_code = c;
+                                    net_name = net_lookup.get(&c).cloned().unwrap_or(first);
+                                } else {
+                                    net_name = first;
+                                }
                             } else {
-                                n
-                            };
+                                let n = self.read_atom();
+                                self.skip_current_list();
+                                if let Ok(c) = first.parse::<usize>() {
+                                    net_code = c;
+                                }
+                                net_name = if n.is_empty() {
+                                    net_lookup.get(&net_code).cloned().unwrap_or_default()
+                                } else {
+                                    n
+                                };
+                            }
                         } else {
                             self.skip_current_list();
                         }

@@ -1,10 +1,12 @@
+pub mod footprint;
 pub mod netlist;
 pub mod pcb_parser;
 pub mod rules_gen;
 
+pub use footprint::{parse_kicad_mod, FpLibTable, FootprintInfo, FootprintResolveError, FootprintResolver};
 pub use netlist::generate_kicad_netlist;
 pub use pcb_parser::{parse_kicad_pcb, PcbBoard, PcbFootprint, PcbPad, PcbParser};
-pub use rules_gen::{generate_kicad_dru, generate_kicad_pro};
+pub use rules_gen::{generate_kicad_dru, generate_kicad_pro, merge_kicad_pro};
 
 #[cfg(test)]
 mod tests {
@@ -127,5 +129,119 @@ mod tests {
             size_mb,
             duration
         );
+    }
+
+    #[test]
+    fn test_kicad10_pcb_parsing_and_utf8() {
+        let pcb = r#"(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Resistor_SMD:R_0603_1608Metric" (layer "F.Cu")
+    (tstamp "r1-uuid-0001")
+    (property "Reference" "R1" (at 0 0 0))
+    (property "Value" "10kΩ" (at 0 1 0))
+    (property "mpn" "RT0603BRE0710KL")
+    (pad "1" smd rect (at -1 0) (size 0.5 0.5) (net "電源_3.3V") (pinfunction "1") (pintype "passive"))
+    (pad "2" smd rect (at 1 0) (size 0.5 0.5) (net "GND") (pinfunction "2") (pintype "passive"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb).expect("Parse KiCad 10 board");
+        assert_eq!(board.footprints.len(), 1);
+        let fp = &board.footprints[0];
+        assert_eq!(fp.refdes, "R1");
+        assert_eq!(fp.value, "10kΩ", "UTF-8 string with Greek Omega must not be corrupted");
+        assert_eq!(fp.pads.len(), 2);
+        assert_eq!(fp.pads[0].pad_number, "1");
+        assert_eq!(fp.pads[0].net_name, "電源_3.3V", "KiCad 10 (net \"NAME\") and UTF-8 must be parsed");
+        assert_eq!(fp.pads[1].pad_number, "2");
+        assert_eq!(fp.pads[1].net_name, "GND");
+    }
+
+    #[test]
+    fn test_parse_kicad_mod_sot23_5() {
+        let content = r#"
+(footprint "Package_TO_SOT_SMD:SOT-23-5"
+  (version 20240108)
+  (pad "1" smd rect (at -0.95 -1.35) (size 0.6 1.05))
+  (pad "2" smd rect (at 0 -1.35) (size 0.6 1.05))
+  (pad "3" smd rect (at 0.95 -1.35) (size 0.6 1.05))
+  (pad "4" smd rect (at 0.95 1.35) (size 0.6 1.05))
+  (pad "5" smd rect (at -0.95 1.35) (size 0.6 1.05))
+)
+"#;
+        let info = parse_kicad_mod(content).expect("parse SOT-23-5");
+        assert_eq!(info.pad_count, 5, "SOT-23-5 must have exactly 5 pads, never guessed as 3");
+        assert_eq!(info.pads, vec!["1", "2", "3", "4", "5"]);
+    }
+
+    #[test]
+    fn test_fp_lib_table_parsing() {
+        let table_str = r#"
+(fp_lib_table
+  (version 7)
+  (lib (name "Package_TO_SOT_SMD")(type "KiCad")(uri "footprints/Package_TO_SOT_SMD.pretty")(options "")(descr ""))
+  (lib (name "Resistor_SMD")(type "KiCad")(uri "footprints/Resistor_SMD.pretty")(options "")(descr ""))
+)
+"#;
+        let table = FpLibTable::parse(table_str, Some(std::path::Path::new("/project"))).expect("parse fp-lib-table");
+        assert_eq!(table.libraries.len(), 2);
+        assert!(table.libraries.contains_key("Package_TO_SOT_SMD"));
+        assert!(table.libraries.contains_key("Resistor_SMD"));
+    }
+
+    #[test]
+    fn test_merge_kicad_pro_preserves_settings_and_emits_patterns() {
+        let ir = FlatNetlistIR {
+            top_module: "timer_core".into(),
+            components: vec![],
+            nets: vec![
+                FlatNet {
+                    name: "VCC".into(),
+                    pads: vec![],
+                    width: Some("0.5mm".into()),
+                    current: None,
+                    netclass: Some("Power".into()),
+                    diffpair: None,
+                },
+                FlatNet {
+                    name: "GND".into(),
+                    pads: vec![],
+                    width: Some("0.5mm".into()),
+                    current: None,
+                    netclass: Some("Power".into()),
+                    diffpair: None,
+                },
+            ],
+            nearby_groups: vec![],
+            join_nodes: vec![],
+        };
+
+        let existing_pro = r#"{
+  "board": {
+    "design_settings": {
+      "rules": {
+        "max_error": 0.005
+      }
+    }
+  },
+  "sheets": [
+    ["uuid-root", ""]
+  ]
+}"#;
+
+        let merged_json = merge_kicad_pro(&ir, Some(existing_pro)).expect("merge pro");
+        let parsed: serde_json::Value = serde_json::from_str(&merged_json).expect("valid json");
+
+        // Existing settings preserved
+        assert!(parsed.get("board").is_some(), "Existing board settings must be preserved");
+        assert!(parsed.get("sheets").is_some(), "Existing sheets settings must be preserved");
+
+        // Netclass generated
+        let classes = parsed["net_settings"]["classes"].as_array().expect("classes array");
+        assert!(classes.iter().any(|c| c["name"] == "Power" && c["track_width"] == 0.5));
+
+        // Netclass patterns generated
+        let patterns = parsed["net_settings"]["netclass_patterns"].as_array().expect("netclass_patterns array");
+        assert!(patterns.iter().any(|p| p["netclass"] == "Power" && p["pattern"] == "VCC"));
+        assert!(patterns.iter().any(|p| p["netclass"] == "Power" && p["pattern"] == "GND"));
     }
 }
