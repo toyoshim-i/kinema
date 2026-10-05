@@ -30,6 +30,11 @@ mod tests {
                     mpn: Some("NE555DR".into()),
                     value: None,
                     dnp: false,
+                    properties: {
+                        let mut m = std::collections::BTreeMap::new();
+                        m.insert("LCSC PN".into(), "C546649".into());
+                        m
+                    },
                     pads: vec![
                         ComponentPad {
                             component_path: "U1".into(),
@@ -66,6 +71,7 @@ mod tests {
         let net_output = generate_kicad_netlist(&ir);
         assert!(net_output.contains("(export (version \"E\")"));
         assert!(net_output.contains("(comp (ref \"U1\")"));
+        assert!(net_output.contains("(property (name \"LCSC PN\") (value \"C546649\"))"));
         assert!(net_output.contains("(net (code \"1\") (name \"VCC\")"));
     }
 

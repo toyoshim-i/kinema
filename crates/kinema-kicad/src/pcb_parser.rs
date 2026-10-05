@@ -19,6 +19,8 @@ pub struct PcbFootprint {
     pub board_only: bool,
     pub tstamp: String,
     pub path: Option<String>,
+    #[serde(default)]
+    pub properties: std::collections::BTreeMap<String, String>,
     pub pads: Vec<PcbPad>,
 }
 
@@ -202,6 +204,7 @@ impl<'a> PcbParser<'a> {
         let mut board_only = false;
         let mut tstamp = String::new();
         let mut path = None;
+        let mut properties = std::collections::BTreeMap::new();
         let mut pads = Vec::new();
 
         while self.cursor < self.bytes.len() {
@@ -223,6 +226,7 @@ impl<'a> PcbParser<'a> {
                     let key = self.read_atom();
                     let val = self.read_atom();
                     self.skip_current_list();
+                    properties.insert(key.clone(), val.clone());
                     match key.as_str() {
                         "Reference" => refdes = val,
                         "Value" => value = val,
@@ -338,6 +342,7 @@ impl<'a> PcbParser<'a> {
             board_only,
             tstamp,
             path,
+            properties,
             pads,
         })
     }

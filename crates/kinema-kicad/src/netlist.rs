@@ -62,6 +62,15 @@ pub fn generate_kicad_netlist(ir: &FlatNetlistIR) -> String {
         if comp.dnp {
             out.push_str("      (property (name \"dnp\") (value \"\"))\n");
         }
+        for (prop_name, prop_val) in &comp.properties {
+            if prop_name != "Reference" && prop_name != "Value" && prop_name != "Footprint" && prop_name != "mpn" && prop_name != "dnp" {
+                out.push_str(&format!(
+                    "      (property (name \"{}\") (value \"{}\"))\n",
+                    escape_sexpr(prop_name),
+                    escape_sexpr(prop_val)
+                ));
+            }
+        }
 
         out.push_str("      (sheetpath (names \"/\") (tstamps \"/\"))\n");
         out.push_str(&format!("      (tstamps \"{}\")\n", uuid));

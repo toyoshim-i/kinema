@@ -374,6 +374,7 @@ endmodule
                 mpn: None,
                 value: None,
                 dnp: false,
+                properties: Default::default(),
                 pads: vec![pad.clone()],
             }],
             nets: vec![
@@ -417,6 +418,7 @@ endmodule
                     mpn: None,
                     value: None,
                     dnp: false,
+                    properties: Default::default(),
                     pads: vec![],
                 },
                 FlatComponent {
@@ -430,6 +432,7 @@ endmodule
                     mpn: None,
                     value: None,
                     dnp: false,
+                    properties: Default::default(),
                     pads: vec![],
                 },
             ],
@@ -479,6 +482,38 @@ endmodule
         let ast = parse("cycle.v", code).expect("parse");
         let err = elaborate_source(&ast).expect_err("mutual recursion must fail elaboration");
         assert!(matches!(err, ElabError::RecursiveInstance(..)), "Expected RecursiveInstance error, got: {:?}", err);
+    }
+
+    #[test]
+    fn test_custom_properties_elaboration() {
+        let code = r#"
+            (* footprint = "LED_SMD:LED_0603", prefix = "D", property = "LCSC PN=C546649", property = "Manufacturer:Everlight" *)
+            module LED #(parameter value = "RED", parameter tolerance = "5%") (
+                (* pad = "1", etype = "passive" *) inout A,
+                (* pad = "2", etype = "passive" *) inout K
+            );
+            endmodule
+
+            module Top ();
+                wire n1;
+                wire n2;
+                (* property = "LCSC PN=C999999", property = "Vendor=Custom" *)
+                LED #(.value("BLUE"), .tolerance("1%")) D1 (
+                    .A(n1),
+                    .K(n2)
+                );
+            endmodule
+        "#;
+        let ast = parse("props.v", code).expect("parse");
+        let ir = elaborate_source(&ast).expect("elaborate");
+        assert_eq!(ir.components.len(), 1);
+        let comp = &ir.components[0];
+        assert_eq!(comp.refdes, "D1");
+        assert_eq!(comp.value.as_deref(), Some("BLUE"));
+        assert_eq!(comp.properties.get("LCSC PN").map(|s| s.as_str()), Some("C999999"));
+        assert_eq!(comp.properties.get("Manufacturer").map(|s| s.as_str()), Some("Everlight"));
+        assert_eq!(comp.properties.get("Vendor").map(|s| s.as_str()), Some("Custom"));
+        assert_eq!(comp.properties.get("tolerance").map(|s| s.as_str()), Some("1%"));
     }
 }
 

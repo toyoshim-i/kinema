@@ -84,6 +84,36 @@ endmodule
     }
 
     #[test]
+    fn test_rule_property_attr_valid() {
+        let code = r#"
+(* footprint = "Resistor_SMD:R_0603_1608Metric", prefix = "R", property = "LCSC PN=C546649" *)
+module leaf (
+    (* pad = "1", etype = "passive" *) inout A,
+    (* pad = "2", etype = "passive" *) inout B
+); endmodule
+module top ();
+    wire w;
+    (* property = "Vendor=Custom" *)
+    leaf u1 (.A(w), .B(w));
+endmodule
+"#;
+        let report = lint_str("test.v", code).unwrap();
+        assert!(report.ok, "Valid property attributes should pass lint: {:?}", report.diagnostics);
+    }
+
+    #[test]
+    fn test_rule_property_attr_invalid_format() {
+        let code = r#"
+(* footprint = "Package:DIP-8", prefix = "U", property = "NoSeparator" *)
+module leaf ((* pad = "1", etype = "passive" *) inout A); endmodule
+module top ();
+    leaf u1 (.A());
+endmodule
+"#;
+        check_rule_triggered(code, "unknown-attr");
+    }
+
+    #[test]
     fn test_rule_unknown_param() {
         let code = r#"
 module leaf (inout A); endmodule

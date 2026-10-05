@@ -472,6 +472,29 @@ impl Elaborator {
                     let mut id = None;
                     let mut ref_override = None;
                     let mut dnp = false;
+                    let mut properties = std::collections::BTreeMap::new();
+
+                    let parse_property_attr = |val: &str| -> Option<(String, String)> {
+                        let (k, v) = if let Some((k, v)) = val.split_once('=') {
+                            (k.trim(), v.trim())
+                        } else if let Some((k, v)) = val.split_once(':') {
+                            (k.trim(), v.trim())
+                        } else {
+                            return None;
+                        };
+                        if !k.is_empty() {
+                            Some((k.to_string(), v.to_string()))
+                        } else {
+                            None
+                        }
+                    };
+
+                    // Collect custom parameters (other than 'value')
+                    for (k, v) in &sub_params {
+                        if k != "value" && !v.is_empty() {
+                            properties.insert(k.clone(), v.clone());
+                        }
+                    }
 
                     // Leaf module attrs
                     for attr in &target_mod.attrs {
@@ -483,6 +506,13 @@ impl Elaborator {
                             }
                             "footprint" => footprint = attr.value.clone(),
                             "mpn" => mpn = attr.value.clone(),
+                            "property" => {
+                                if let Some(v) = &attr.value {
+                                    if let Some((pk, pv)) = parse_property_attr(v) {
+                                        properties.insert(pk, pv);
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -495,6 +525,13 @@ impl Elaborator {
                             "id" => id = attr.value.clone(),
                             "ref" => ref_override = attr.value.clone(),
                             "dnp" => dnp = true,
+                            "property" => {
+                                if let Some(v) = &attr.value {
+                                    if let Some((pk, pv)) = parse_property_attr(v) {
+                                        properties.insert(pk, pv);
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -584,6 +621,7 @@ impl Elaborator {
                         mpn,
                         value,
                         dnp,
+                        properties,
                         pads: component_pads,
                     });
                 } else {

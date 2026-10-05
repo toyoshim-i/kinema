@@ -40,6 +40,7 @@ pub const CANONICAL_ATTR_ORDER: &[&str] = &[
     "footprint",
     "mpn",
     "prefix",
+    "property",
     "pad",
     "etype",
     "decouple",

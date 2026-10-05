@@ -269,7 +269,7 @@ The agent will:
 
 ## Testing & Verification
 
-Run the complete test suite (115 unit and integration tests across all 7 crates):
+Run the complete test suite (117 unit and integration tests across all 7 crates):
 
 ```bash
 cargo test --workspace

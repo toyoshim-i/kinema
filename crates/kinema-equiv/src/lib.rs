@@ -24,6 +24,7 @@ mod tests {
                     mpn: Some("NE555DR".into()),
                     value: None,
                     dnp: false,
+                    properties: Default::default(),
                     pads: vec![
                         ComponentPad {
                             component_path: "U1".into(),
@@ -52,6 +53,7 @@ mod tests {
                     mpn: None,
                     value: Some("10k".into()),
                     dnp: false,
+                    properties: Default::default(),
                     pads: vec![
                         ComponentPad {
                             component_path: "R1".into(),
@@ -376,5 +378,38 @@ mod tests {
             let actual = diag.actual.as_ref().unwrap();
             assert_eq!(actual["primary_pcb_net"], "NET_A", "Tied candidate nets must deterministically pick NET_A");
         }
+    }
+
+    #[test]
+    fn test_equiv_field_mismatch_custom_property() {
+        let mut ir = sample_ir();
+        ir.components[0].properties.insert("LCSC PN".into(), "C546649".into());
+
+        let pcb_content = r#"
+(kicad_pcb (version 20241001) (generator "kicad_10")
+  (footprint "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"
+    (tstamp "a3f9-uuid")
+    (property "Reference" "U1")
+    (property "Value" "NE555DR")
+    (property "mpn" "NE555DR")
+    (property "LCSC PN" "C123456")
+    (pad "7" smd rect (net "DIS"))
+  )
+  (footprint "Resistor_SMD:R_0603_1608Metric"
+    (tstamp "r1-uuid")
+    (property "Reference" "R1")
+    (property "Value" "10k")
+    (pad "2" smd rect (net "DIS"))
+  )
+)
+"#;
+        let board = parse_kicad_pcb(pcb_content).expect("parse pcb");
+        let report = check_equivalence(&ir, &board);
+        assert!(!report.ok);
+        assert!(
+            report.diagnostics.iter().any(|d| d.code == "field-mismatch" && d.message.contains("LCSC PN")),
+            "Expected field-mismatch for LCSC PN: {:?}",
+            report.diagnostics
+        );
     }
 }

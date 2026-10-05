@@ -209,6 +209,7 @@ Attribute keys belong to a fixed set. Unknown keys are treated as lint errors. A
 | `footprint` | Leaf module, instance | `Library:FootprintName` | Physical PCB footprint. Instance attribute overrides module default. |
 | `mpn` | Leaf module, instance | String | Manufacturer Part Number. Exported to BOM. |
 | `prefix` | Leaf module | `"U"`, `"R"`, `"C"`, etc. | Reference designator prefix. Mandatory on leaf modules. |
+| `property` | Leaf module, instance | `"Name=Value"` or `"Name:Value"` | Custom footprint property (e.g. `"LCSC PN=C546649"`). Exported to KiCad footprint properties. |
 | `pad` | Leaf module port | `"1"`, `"1,5,EP"`, etc. | Physical pad number(s). Multiple pads separated by commas. |
 | `etype` | Port | Enum (see below) | Electrical pin type. Mandatory on leaf module ports. |
 | `decouple` | Leaf module port | `"required"` | Pin requiring local bypass decoupling capacitor. |
@@ -226,7 +227,14 @@ Corresponds to KiCad pin types:
 - `input`, `output`, `bidirectional`, `tri_state`, `passive`, `power_in`, `power_out`, `open_collector`, `open_emitter`, `no_connect`.
 
 ### 4.2 Passive Values & Parameters
-Values for passive components (`R`, `C`, `L`, `D`) are passed via module parameters (e.g., `#(.value("10k"))`), not attributes. Standard generic passives are provided in `lib/std.v`.
+Values for passive components (`R`, `C`, `L`, `D`) are passed via module parameters (e.g., `#(.value("10k"))`), not attributes. Standard generic passives are provided in `lib/std.v`. Custom parameters (other than `value`) are also automatically exported to KiCad footprint properties.
+
+### 4.3 Custom Properties
+Arbitrary custom footprint properties can be specified using `property` attributes:
+- Format: `(* property = "Name=Value" *)` or `(* property = "Name:Value" *)`
+- Example: `(* property = "LCSC PN=C546649" *)` (for JLCPCB / LCSC SMT assembly)
+- Leaf module properties serve as component defaults; instance properties override or extend them.
+- All custom properties are exported to KiCad `.net` netlist properties `(property (name "Name") (value "Value"))` and verified for equivalence against `.kicad_pcb` layouts.
 
 ---
 

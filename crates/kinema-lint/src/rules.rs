@@ -1462,6 +1462,7 @@ fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut 
         "decouple" => target_kind == "port" && is_leaf,
         "id" => target_kind == "instance",
         "ref" => target_kind == "instance",
+        "property" => (target_kind == "module" && is_leaf) || target_kind == "instance",
         "dnp" => target_kind == "instance",
         "nearby" => target_kind == "wire",
         "width" => target_kind == "wire" || target_kind == "port",
@@ -1514,6 +1515,38 @@ fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut 
                     message: format!("Invalid etype '{}'. Must be one of {:?}", val, VALID_ETYPES),
                 });
             }
+        }
+    } else if attr.key == "property" {
+        let is_valid_format = if let Some(val) = &attr.value {
+            let sep_pos = val.find('=').or_else(|| val.find(':'));
+            if let Some(pos) = sep_pos {
+                !val[..pos].trim().is_empty()
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if !is_valid_format {
+            diags.push(Diagnostic {
+                stage: "lint".into(),
+                code: "unknown-attr".into(),
+                severity: "error".into(),
+                location: Some(attr.span.to_location()),
+                subject: Subject {
+                    kind: target_kind.into(),
+                    name: Some(attr.key.clone()),
+                    path: None,
+                    id: None,
+                    ref_des: None,
+                    pad: None,
+                },
+                related: vec![],
+                expected: Some(serde_json::json!("Name=Value or Name:Value")),
+                actual: attr.value.as_ref().map(|v| serde_json::json!(v)),
+                fix: Some("Specify property attribute in \"Name=Value\" format (e.g. \"LCSC PN=C546649\")".into()),
+                message: "Invalid property attribute format. Must be \"Name=Value\" or \"Name:Value\" (e.g. \"LCSC PN=C546649\")".into(),
+            });
         }
     }
 }

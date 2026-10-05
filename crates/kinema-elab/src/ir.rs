@@ -21,6 +21,8 @@ pub struct FlatComponent {
     pub mpn: Option<String>,
     pub value: Option<String>,
     pub dnp: bool,
+    #[serde(default)]
+    pub properties: std::collections::BTreeMap<String, String>,
     pub pads: Vec<ComponentPad>,
 }
 

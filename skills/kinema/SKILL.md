@@ -1,6 +1,6 @@
 ---
 name: kinema-pcb-design
-description: Design, modify, and verify printed circuit boards (PCBs) in KiCad using kinema, a hardware description language based on a strict structural Verilog subset and offline equivalence verification toolchain. Use whenever designing circuits, authoring .v circuit files, importing netlists into KiCad, or verifying PCB layouts against kinema.toml.
+description: Design, modify, route, and verify printed circuit boards (PCBs) in KiCad using kinema, or work on KiCad PCB layouts using the kinema toolchain. Use whenever asked to design circuits or PCBs in KiCad with kinema, create, edit, or route PCB layouts with kinema, author .v circuit files, import netlists into KiCad, or verify PCB layouts against circuit definitions.
 ---
 
 # kinema PCB Design Guide
@@ -51,6 +51,7 @@ When beginning a task, first inspect `kinema.toml`, `git log`, existing `.v` fil
   - Electrical pin types (`etype`).
   - Power pins requiring decoupling marked with `decouple = "required"` (each placed on its own port).
   - Reference prefix, footprint, and MPN.
+  - Optional custom properties (e.g. LCSC part numbers via `(* property = "LCSC PN=C546649" *)`) and DNP status (`(* dnp *)`).
 
 ### Stage 2: Circuit Description
 - Author modules in `src/` following the grammar and connection model.
@@ -152,11 +153,31 @@ The language is a strict structural subset of Verilog:
 | `id` | Instance | Stable identity key | `(* id = "u1_core" *)` |
 | `ref` | Instance | Fixed refdes override | `(* ref = "U1" *)` |
 | `dnp` | Instance | Do Not Populate flag | `(* dnp *)` |
+| `property` | Leaf, instance | Custom footprint property | `(* property = "LCSC PN=C546649" *)` |
 | `nearby` | Hub wire | Proximity hint | `(* nearby *) wire vcc_u1;` |
 | `width` | Wire, port | Min track width constraint | `(* width = "0.5mm" *)` |
 | `current` | Wire, port | Current capacity hint | `(* current = "1.5A" *)` |
 | `netclass` | Wire, port | KiCad netclass name | `(* netclass = "Power" *)` |
 | `diffpair` | Wire | Differential pair pair | `(* diffpair = "USB_D" *)` |
+
+### Custom Properties & DNP Example
+
+```verilog
+// Leaf module with default LCSC part number property
+(* footprint = "LED_SMD:LED_0603_1608Metric", prefix = "D", property = "LCSC PN=C546649" *)
+module LED_RED (
+    (* pad = "1", etype = "passive" *) inout A,
+    (* pad = "2", etype = "passive" *) inout K
+);
+endmodule
+
+// Circuit instance with DNP flag or specific LCSC part number override
+(* property = "LCSC PN=C546649" *)
+LED_RED D1 (.A(PWR_IND), .K(GND));
+
+(* dnp *)
+R #(.value("10k")) R_TEST (.A(VCC), .B(TP1));
+```
 
 ---
 

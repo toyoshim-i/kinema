@@ -197,6 +197,32 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                     message: format!("DNP attribute mismatch for component '{}'", comp.refdes),
                 });
             }
+
+            // Check custom properties (e.g. "LCSC PN")
+            for (prop_name, exp_prop_val) in &comp.properties {
+                let actual_prop_val = fp.properties.get(prop_name).map(|s| s.as_str()).unwrap_or("");
+                if exp_prop_val != actual_prop_val {
+                    diags.push(Diagnostic {
+                        stage: "equiv".into(),
+                        code: "field-mismatch".into(),
+                        severity: "error".into(),
+                        location: None,
+                        subject: Subject {
+                            kind: "component".into(),
+                            name: Some(comp.refdes.clone()),
+                            path: Some(comp.path.clone()),
+                            id: Some(comp.identity_key.clone()),
+                            ref_des: Some(comp.refdes.clone()),
+                            pad: None,
+                        },
+                        related: vec![],
+                        expected: Some(serde_json::json!(exp_prop_val)),
+                        actual: Some(serde_json::json!(actual_prop_val)),
+                        fix: None,
+                        message: format!("Property '{}' mismatch for component '{}' (expected: {}, actual: {})", prop_name, comp.refdes, exp_prop_val, actual_prop_val),
+                    });
+                }
+            }
         }
     }
 
