@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[command(name = "kinema", version = "0.1.0", about = "Circuit Description Language & KiCad Equivalence Verification Tool")]
+#[command(name = "kinema", version, about = "Circuit Description Language & KiCad Equivalence Verification Tool")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
