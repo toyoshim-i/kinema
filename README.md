@@ -187,8 +187,8 @@ kinema check --stage lint examples/timer_core.v
 # Machine-readable JSON output for AI agents
 kinema check --stage lint --json examples/timer_core.v
 
-# Full verification against board.kicad_pcb
-kinema check
+# Full verification against board layout (specified in kinema.toml or CLI)
+kinema check examples/timer_core.v board.kicad_pcb
 ```
 
 ### `kinema netlist`

@@ -1,0 +1,4 @@
+[project]
+name = "timer_example"
+sources = ["timer_core.v"]
+libraries = ["../lib/*.v"]

@@ -125,6 +125,7 @@ fn test_cli_rules() {
             pro_file.to_str().unwrap(),
             "--dru",
             dru_file.to_str().unwrap(),
+            "examples/timer_core.v",
         ])
         .output()
         .expect("failed to execute kinema rules");
