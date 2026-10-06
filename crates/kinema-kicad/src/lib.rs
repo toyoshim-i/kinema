@@ -255,6 +255,56 @@ mod tests {
     }
 
     #[test]
+    fn test_fp_lib_table_nested_table_parsing() {
+        let temp_dir = std::env::temp_dir().join(format!("kinema_test_nested_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let child_table_path = temp_dir.join("template_fp_lib_table");
+        let child_content = r#"
+(fp_lib_table
+  (version 7)
+  (lib (name "Connector_JST")(type "KiCad")(uri "${KICAD_FOOTPRINT_DIR}/Connector_JST.pretty")(options "")(descr ""))
+  (lib (name "Package_QFP")(type "KiCad")(uri "${KICAD_FOOTPRINT_DIR}/Package_QFP.pretty")(options "")(descr ""))
+)
+"#;
+        std::fs::write(&child_table_path, child_content).expect("write child table");
+
+        let parent_content = format!(
+            r#"
+(fp_lib_table
+  (version 7)
+  (lib (name "KiCad")(type "Table")(uri "{}")(options "")(descr ""))
+  (lib (name "Local_Lib")(type "KiCad")(uri "/local/footprints.pretty")(options "")(descr ""))
+)
+"#,
+            child_table_path.to_string_lossy()
+        );
+
+        let mut env_vars = std::collections::HashMap::new();
+        env_vars.insert("KICAD_FOOTPRINT_DIR".to_string(), "/kicad/footprints".to_string());
+
+        let table = FpLibTable::parse_with_env(&parent_content, Some(&temp_dir), &env_vars)
+            .expect("parse nested fp-lib-table");
+
+        assert_eq!(table.libraries.len(), 3);
+        assert!(!table.libraries.contains_key("KiCad"), "Nested table container itself should not be in libraries");
+        assert_eq!(
+            table.libraries.get("Connector_JST"),
+            Some(&std::path::PathBuf::from("/kicad/footprints/Connector_JST.pretty"))
+        );
+        assert_eq!(
+            table.libraries.get("Package_QFP"),
+            Some(&std::path::PathBuf::from("/kicad/footprints/Package_QFP.pretty"))
+        );
+        assert_eq!(
+            table.libraries.get("Local_Lib"),
+            Some(&std::path::PathBuf::from("/local/footprints.pretty"))
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
     fn test_merge_kicad_pro_preserves_settings_and_emits_patterns() {
         let ir = FlatNetlistIR {
             top_module: "timer_core".into(),

@@ -55,6 +55,16 @@ impl FpLibTable {
         base_dir: Option<&Path>,
         env_vars: &HashMap<String, String>,
     ) -> Result<Self, String> {
+        let mut visited = HashSet::new();
+        Self::parse_internal(content, base_dir, env_vars, &mut visited)
+    }
+
+    fn parse_internal(
+        content: &str,
+        base_dir: Option<&Path>,
+        env_vars: &HashMap<String, String>,
+        visited: &mut HashSet<PathBuf>,
+    ) -> Result<Self, String> {
         let mut libraries = HashMap::new();
         let bytes = content.as_bytes();
         let mut cursor = 0;
@@ -64,6 +74,7 @@ impl FpLibTable {
             if cursor + 4 <= bytes.len() && &bytes[cursor..cursor + 4] == b"(lib" {
                 cursor += 4;
                 let mut lib_name = String::new();
+                let mut lib_type = String::new();
                 let mut lib_uri = String::new();
 
                 let mut depth = 1;
@@ -75,6 +86,9 @@ impl FpLibTable {
                         if cursor + 4 <= bytes.len() && &bytes[cursor..cursor + 4] == b"name" {
                             cursor += 4;
                             lib_name = extract_next_string(bytes, &mut cursor);
+                        } else if cursor + 4 <= bytes.len() && &bytes[cursor..cursor + 4] == b"type" {
+                            cursor += 4;
+                            lib_type = extract_next_string(bytes, &mut cursor);
                         } else if cursor + 3 <= bytes.len() && &bytes[cursor..cursor + 3] == b"uri" {
                             cursor += 3;
                             lib_uri = extract_next_string(bytes, &mut cursor);
@@ -84,7 +98,7 @@ impl FpLibTable {
                     }
                 }
 
-                if !lib_name.is_empty() && !lib_uri.is_empty() {
+                if !lib_uri.is_empty() {
                     let expanded_uri = expand_env_vars(&lib_uri, base_dir, env_vars);
                     let mut path = PathBuf::from(&expanded_uri);
                     if path.is_relative() {
@@ -92,7 +106,24 @@ impl FpLibTable {
                             path = base.join(path);
                         }
                     }
-                    libraries.insert(lib_name, path);
+
+                    if lib_type.eq_ignore_ascii_case("Table") {
+                        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+                        if visited.insert(canonical) {
+                            if let Ok(nested_content) = fs::read_to_string(&path) {
+                                if let Ok(nested_table) = Self::parse_internal(
+                                    &nested_content,
+                                    path.parent(),
+                                    env_vars,
+                                    visited,
+                                ) {
+                                    libraries.extend(nested_table.libraries);
+                                }
+                            }
+                        }
+                    } else if !lib_name.is_empty() {
+                        libraries.insert(lib_name, path);
+                    }
                 }
             } else {
                 cursor += 1;
@@ -145,10 +176,11 @@ impl FpLibTable {
         let content = fs::read_to_string(&table_path).ok()?;
         let mut env_vars = read_kicad_common_env(&version_dir);
 
-        // Inject explicit or environment footprint directory
+        // Inject explicit, environment, or detected footprint directory
         let fp_dir = explicit_footprint_dir
             .map(|p| p.to_string_lossy().to_string())
-            .or_else(|| std::env::var("KICAD_FOOTPRINT_DIR").ok());
+            .or_else(|| std::env::var("KICAD_FOOTPRINT_DIR").ok())
+            .or_else(|| find_default_footprint_dir().map(|p| p.to_string_lossy().to_string()));
         if let Some(dir) = fp_dir {
             env_vars.insert("KICAD_FOOTPRINT_DIR".to_string(), dir.clone());
             env_vars.insert("KICAD10_FOOTPRINT_DIR".to_string(), dir.clone());
@@ -168,13 +200,18 @@ impl FpLibTable {
         if let Some(table_path) = &options.fp_lib_table {
             if let Ok(content) = fs::read_to_string(table_path) {
                 let mut env_vars = HashMap::new();
-                if let Some(dir) = &options.kicad_footprint_dir {
-                    let d = dir.to_string_lossy().to_string();
-                    env_vars.insert("KICAD_FOOTPRINT_DIR".to_string(), d.clone());
-                    env_vars.insert("KICAD10_FOOTPRINT_DIR".to_string(), d.clone());
-                    env_vars.insert("KICAD9_FOOTPRINT_DIR".to_string(), d.clone());
-                    env_vars.insert("KICAD8_FOOTPRINT_DIR".to_string(), d.clone());
-                    env_vars.insert("KICAD7_FOOTPRINT_DIR".to_string(), d);
+                let fp_dir = options
+                    .kicad_footprint_dir
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .or_else(|| std::env::var("KICAD_FOOTPRINT_DIR").ok())
+                    .or_else(|| find_default_footprint_dir().map(|p| p.to_string_lossy().to_string()));
+                if let Some(dir) = fp_dir {
+                    env_vars.insert("KICAD_FOOTPRINT_DIR".to_string(), dir.clone());
+                    env_vars.insert("KICAD10_FOOTPRINT_DIR".to_string(), dir.clone());
+                    env_vars.insert("KICAD9_FOOTPRINT_DIR".to_string(), dir.clone());
+                    env_vars.insert("KICAD8_FOOTPRINT_DIR".to_string(), dir.clone());
+                    env_vars.insert("KICAD7_FOOTPRINT_DIR".to_string(), dir);
                 }
                 return Self::parse_with_env(&content, table_path.parent(), &env_vars).ok();
             }
@@ -323,6 +360,7 @@ fn find_default_footprint_dir() -> Option<PathBuf> {
                 return Some(path);
             }
         }
+        let mut candidates = Vec::new();
         if let Ok(entries) = fs::read_dir("/Applications") {
             for entry in entries.flatten() {
                 let name = entry.file_name();
@@ -330,14 +368,27 @@ fn find_default_footprint_dir() -> Option<PathBuf> {
                 if name_str.starts_with("KiCad") {
                     let candidate = entry.path().join("Contents/SharedSupport/footprints");
                     if candidate.exists() {
-                        return Some(candidate);
+                        candidates.push((name_str.to_string(), candidate));
                     }
                     let candidate2 = entry.path().join("KiCad.app/Contents/SharedSupport/footprints");
                     if candidate2.exists() {
-                        return Some(candidate2);
+                        candidates.push((name_str.to_string(), candidate2));
                     }
                 }
             }
+        }
+        candidates.sort_by(|a, b| {
+            let ver_a = a.0.strip_prefix("KiCad").and_then(|s| s.parse::<f64>().ok());
+            let ver_b = b.0.strip_prefix("KiCad").and_then(|s| s.parse::<f64>().ok());
+            match (ver_a, ver_b) {
+                (Some(va), Some(vb)) => vb.partial_cmp(&va).unwrap_or(std::cmp::Ordering::Equal),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => b.0.cmp(&a.0),
+            }
+        });
+        if let Some((_, path)) = candidates.into_iter().next() {
+            return Some(path);
         }
     }
 
@@ -446,9 +497,13 @@ impl FootprintResolver {
                 search_dirs.push(dir.clone());
             }
         }
-        if let Some(fp_dir) = &options.kicad_footprint_dir {
-            if !search_dirs.contains(fp_dir) {
-                search_dirs.push(fp_dir.clone());
+        let fallback_fp_dir = options
+            .kicad_footprint_dir
+            .clone()
+            .or_else(find_default_footprint_dir);
+        if let Some(fp_dir) = fallback_fp_dir {
+            if !search_dirs.contains(&fp_dir) {
+                search_dirs.push(fp_dir);
             }
         }
         Self { table, search_dirs }
