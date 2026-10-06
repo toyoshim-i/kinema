@@ -3,14 +3,20 @@ use kinema_syntax::ast::*;
 use std::collections::{HashMap, HashSet};
 
 pub fn check_rules(source_files: &[SourceFile]) -> Vec<Diagnostic> {
-    let mut diags = Vec::new();
-
     let project_dir = source_files
         .first()
         .and_then(|f| f.modules.first())
         .map(|m| std::path::Path::new(&m.span.file).parent().unwrap_or(std::path::Path::new(".")))
         .unwrap_or(std::path::Path::new("."));
     let fp_resolver = kinema_kicad::FootprintResolver::auto_discover(project_dir);
+    check_rules_with_resolver(source_files, &fp_resolver)
+}
+
+pub fn check_rules_with_resolver(
+    source_files: &[SourceFile],
+    fp_resolver: &kinema_kicad::FootprintResolver,
+) -> Vec<Diagnostic> {
+    let mut diags = Vec::new();
 
     // 8. duplicate-module
     let mut module_map: HashMap<String, Vec<&ModuleDef>> = HashMap::new();

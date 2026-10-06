@@ -31,15 +31,28 @@ impl Default for ProjectSection {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct KicadSection {
+    pub config_dir: Option<PathBuf>,
+    pub footprint_dir: Option<PathBuf>,
+    pub fp_lib_table: Option<PathBuf>,
+    #[serde(default)]
+    pub search_paths: Vec<PathBuf>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize)]
 pub struct ProjectConfig {
     pub project: ProjectSection,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kicad: Option<KicadSection>,
 }
 
 #[derive(Deserialize)]
 struct RawProjectConfig {
     #[serde(default)]
     project: Option<ProjectSection>,
+    #[serde(default)]
+    kicad: Option<KicadSection>,
     name: Option<String>,
     #[serde(default)]
     sources: Option<Vec<String>>,
@@ -74,7 +87,10 @@ impl<'de> Deserialize<'de> for ProjectConfig {
                 }
             }
         };
-        Ok(ProjectConfig { project })
+        Ok(ProjectConfig {
+            project,
+            kicad: raw.kicad,
+        })
     }
 }
 

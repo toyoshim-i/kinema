@@ -3,7 +3,10 @@ pub mod netlist;
 pub mod pcb_parser;
 pub mod rules_gen;
 
-pub use footprint::{parse_kicad_mod, FpLibTable, FootprintInfo, FootprintResolveError, FootprintResolver};
+pub use footprint::{
+    parse_kicad_mod, FootprintInfo, FootprintResolveError, FootprintResolver, FootprintResolverOptions,
+    FpLibTable,
+};
 pub use netlist::generate_kicad_netlist;
 pub use pcb_parser::{parse_kicad_pcb, PcbBoard, PcbFootprint, PcbPad, PcbParser};
 pub use rules_gen::{generate_kicad_dru, generate_kicad_pro, merge_kicad_pro};
@@ -192,6 +195,63 @@ mod tests {
         assert_eq!(table.libraries.len(), 2);
         assert!(table.libraries.contains_key("Package_TO_SOT_SMD"));
         assert!(table.libraries.contains_key("Resistor_SMD"));
+    }
+
+    #[test]
+    fn test_fp_lib_table_parsing_with_kiprjmod() {
+        let table_str = r#"
+(fp_lib_table
+  (version 7)
+  (lib (name "Custom_Lib")(type "KiCad")(uri "${KIPRJMOD}/footprints/Custom.pretty")(options "")(descr ""))
+)
+"#;
+        let base = std::path::Path::new("/workspace/my_board");
+        let table = FpLibTable::parse(table_str, Some(base)).expect("parse fp-lib-table with KIPRJMOD");
+        assert_eq!(
+            table.libraries.get("Custom_Lib"),
+            Some(&base.join("footprints/Custom.pretty"))
+        );
+    }
+
+    #[test]
+    fn test_fp_lib_table_merging() {
+        let global_str = r#"
+(fp_lib_table
+  (version 7)
+  (lib (name "Resistor_SMD")(type "KiCad")(uri "/global/footprints/Resistor_SMD.pretty")(options "")(descr ""))
+  (lib (name "Capacitor_SMD")(type "KiCad")(uri "/global/footprints/Capacitor_SMD.pretty")(options "")(descr ""))
+)
+"#;
+        let project_str = r#"
+(fp_lib_table
+  (version 7)
+  (lib (name "Resistor_SMD")(type "KiCad")(uri "${KIPRJMOD}/custom_resistors.pretty")(options "")(descr ""))
+  (lib (name "My_Sensors")(type "KiCad")(uri "${KIPRJMOD}/sensors.pretty")(options "")(descr ""))
+)
+"#;
+        let mut global_table = FpLibTable::parse(global_str, None).expect("parse global table");
+        let project_dir = std::path::Path::new("/project");
+        let project_table = FpLibTable::parse(project_str, Some(project_dir)).expect("parse project table");
+
+        // Merge: project entries override/supplement global entries
+        global_table.libraries.extend(project_table.libraries);
+
+        assert_eq!(global_table.libraries.len(), 3);
+        // Overridden by project
+        assert_eq!(
+            global_table.libraries.get("Resistor_SMD"),
+            Some(&project_dir.join("custom_resistors.pretty"))
+        );
+        // Kept from global
+        assert_eq!(
+            global_table.libraries.get("Capacitor_SMD"),
+            Some(&std::path::PathBuf::from("/global/footprints/Capacitor_SMD.pretty"))
+        );
+        // Added from project
+        assert_eq!(
+            global_table.libraries.get("My_Sensors"),
+            Some(&project_dir.join("sensors.pretty"))
+        );
     }
 
     #[test]

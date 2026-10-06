@@ -165,5 +165,26 @@ board = "flat_board.kicad_pcb"
         let config: ProjectConfig = toml::from_str("").expect("parse empty project config");
         let default_sec = ProjectSection::default();
         assert_eq!(config.project, default_sec);
+        assert_eq!(config.kicad, None);
+    }
+
+    #[test]
+    fn test_project_config_with_kicad_section() {
+        let toml_str = r#"
+[project]
+name = "kicad_project"
+
+[kicad]
+config_dir = "/custom/kicad/config"
+footprint_dir = "/custom/kicad/footprints"
+fp_lib_table = "/custom/kicad/fp-lib-table"
+search_paths = ["/extra/footprints", "local/footprints"]
+"#;
+        let config: ProjectConfig = toml::from_str(toml_str).expect("parse kicad config section");
+        let kicad = config.kicad.expect("kicad section present");
+        assert_eq!(kicad.config_dir, Some(std::path::PathBuf::from("/custom/kicad/config")));
+        assert_eq!(kicad.footprint_dir, Some(std::path::PathBuf::from("/custom/kicad/footprints")));
+        assert_eq!(kicad.fp_lib_table, Some(std::path::PathBuf::from("/custom/kicad/fp-lib-table")));
+        assert_eq!(kicad.search_paths.len(), 2);
     }
 }

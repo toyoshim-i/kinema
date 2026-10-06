@@ -2,13 +2,21 @@ pub mod diagnostic;
 pub mod rules;
 
 pub use diagnostic::{Diagnostic, LintReport, Related, Subject};
-pub use rules::check_rules;
+pub use rules::{check_rules, check_rules_with_resolver};
 
 use kinema_syntax::ast::SourceFile;
 use kinema_syntax::parser::parse;
 
 pub fn lint_source_files(files: &[SourceFile]) -> LintReport {
     let diags = check_rules(files);
+    LintReport::from_diagnostics(diags)
+}
+
+pub fn lint_source_files_with_resolver(
+    files: &[SourceFile],
+    fp_resolver: &kinema_kicad::FootprintResolver,
+) -> LintReport {
+    let diags = check_rules_with_resolver(files, fp_resolver);
     LintReport::from_diagnostics(diags)
 }
 

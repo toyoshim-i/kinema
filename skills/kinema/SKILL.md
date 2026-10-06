@@ -16,10 +16,20 @@ Design printed circuit boards by writing circuit descriptions in a strict struct
 3. **Verified Leaf Modules**: Only use component leaf modules that have been agreed upon with human review or verified from manufacturer datasheets. Never guess pinouts.
 4. **Human Review Gates**: Request human confirmation at defined checkpoints (Part Selection / Leaf Definition and Visual Schematic Review).
 5. **Loop Limit**: If an automated fix loop fails 5 times consecutively on the same issue, stop and ask the user for guidance.
+6. **No Machine-Specific Paths in Project**: Never commit or write machine-specific absolute paths (such as `/Applications/KiCad...` or `C:/...`) into project files or `fp-lib-table`. Standard libraries (`Capacitor_SMD`, `Resistor_SMD`, `Package_SO`, etc.) must always be resolved via KiCad's global library configuration.
 
 ---
 
-## Prerequisites & Project Layout
+## Execution Environment & Library Guidelines
+
+1. **Permissions for System KiCad Access**:
+   - Verification commands (`kinema check` with DRC/strict, and `kicad-cli`) require access to KiCad system installations and user configurations outside the workspace (e.g. `%APPDATA%\kicad\` on Windows, `~/Library/Preferences/kicad/` on macOS, and `~/.config/kicad/` or `/usr/share/kicad/` on Linux).
+   - Ensure the execution environment has sufficient permissions to access external system paths to avoid repetitive permission checks.
+2. **Explicit Path Options When Needed**:
+   - If KiCad libraries or configurations are located in non-standard paths, use CLI options (`--kicad-config-dir`, `--kicad-footprint-dir`, `-I / --search-path`), environment variables (`KICAD_CONFIG_DIR`, `KICAD_FOOTPRINT_DIR`), or the `[kicad]` section in `kinema.toml`.
+3. **Never Add Standard Libraries to Project `fp-lib-table`**:
+   - Standard KiCad libraries (`Capacitor_SMD`, `Resistor_SMD`, `Package_SO`, etc.) are resolved globally.
+   - Do **NOT** add standard libraries or local machine absolute paths to the project's `fp-lib-table`. The project `fp-lib-table` is strictly for repository-local custom footprints using `${KIPRJMOD}`.
 
 ### Tools
 - `kinema` CLI installed and available on PATH (`kinema --version`).
@@ -99,7 +109,7 @@ When beginning a task, first inspect `kinema.toml`, `git log`, existing `.v` fil
   - Save `board.kicad_pcb` when complete.
 
 ### Stage 6: Verification
-Run the unified verification suite:
+Run the unified verification suite (*ensure permissions allow access to KiCad system libraries and kicad-cli*):
 ```bash
 # During iterative design (checks syntax, formatting, and static lint):
 kinema check --json

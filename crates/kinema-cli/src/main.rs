@@ -2,9 +2,12 @@ use clap::{Parser, Subcommand, ValueEnum};
 use kinema_elab::{elaborate_sources, FlatNetlistIR};
 use kinema_equiv::check_equivalence;
 use kinema_fmt::format_str;
-use kinema_kicad::{generate_kicad_dru, generate_kicad_netlist, merge_kicad_pro, parse_kicad_pcb};
+use kinema_kicad::{
+    generate_kicad_dru, generate_kicad_netlist, merge_kicad_pro, parse_kicad_pcb,
+    FootprintResolver, FootprintResolverOptions,
+};
 use kinema_lint::diagnostic::{Diagnostic, LintReport, Subject};
-use kinema_lint::lint_source_files;
+use kinema_lint::lint_source_files_with_resolver;
 use kinema_syntax::ast::{SourceFile, SourceLocation};
 use kinema_syntax::parser::parse;
 use kinema_syntax::project::ProjectConfig;
@@ -47,6 +50,18 @@ enum Commands {
         deny_warnings: bool,
         #[arg(long, alias = "signoff")]
         strict: bool,
+        /// Explicit path to KiCad configuration directory containing fp-lib-table and kicad_common.json
+        #[arg(long)]
+        kicad_config_dir: Option<PathBuf>,
+        /// Explicit path to KiCad footprint library directory
+        #[arg(long, alias = "footprint-dir")]
+        kicad_footprint_dir: Option<PathBuf>,
+        /// Explicit path to fp-lib-table file
+        #[arg(long)]
+        fp_lib_table: Option<PathBuf>,
+        /// Additional search directories for footprint libraries
+        #[arg(short = 'I', long = "search-path")]
+        search_paths: Vec<PathBuf>,
         #[arg(default_value = "")]
         files: Vec<String>,
     },
@@ -227,7 +242,17 @@ fn main() -> ExitCode {
             }
         }
 
-        Commands::Check { stage, json, deny_warnings, strict, files } => {
+        Commands::Check {
+            stage,
+            json,
+            deny_warnings,
+            strict,
+            kicad_config_dir,
+            kicad_footprint_dir,
+            fp_lib_table,
+            search_paths,
+            files,
+        } => {
             let (paths, board_path) = resolve_project_sources(&files);
             let source_files = match load_source_files(&paths) {
                 Ok(f) => f,
@@ -283,7 +308,46 @@ fn main() -> ExitCode {
 
             // 3. Lint stage (AST rules + Elaboration verification)
             if stage.is_none() || stage == Some(Stage::Lint) {
-                let lint_report = lint_source_files(&source_files);
+                let config = if Path::new("kinema.toml").exists() {
+                    ProjectConfig::load_or_default("kinema.toml")
+                } else {
+                    ProjectConfig::default()
+                };
+
+                let effective_fp_table = fp_lib_table
+                    .or_else(|| config.kicad.as_ref().and_then(|k| k.fp_lib_table.clone()));
+
+                let effective_config_dir = kicad_config_dir
+                    .or_else(|| std::env::var("KICAD_CONFIG_DIR").ok().map(PathBuf::from))
+                    .or_else(|| config.kicad.as_ref().and_then(|k| k.config_dir.clone()));
+
+                let effective_footprint_dir = kicad_footprint_dir
+                    .or_else(|| std::env::var("KICAD_FOOTPRINT_DIR").ok().map(PathBuf::from))
+                    .or_else(|| config.kicad.as_ref().and_then(|k| k.footprint_dir.clone()));
+
+                let mut effective_search_paths = search_paths;
+                if let Some(kicad_sec) = &config.kicad {
+                    for sp in &kicad_sec.search_paths {
+                        if !effective_search_paths.contains(sp) {
+                            effective_search_paths.push(sp.clone());
+                        }
+                    }
+                }
+
+                let project_dir = paths
+                    .first()
+                    .and_then(|p| p.parent())
+                    .unwrap_or(Path::new("."));
+
+                let resolver_opts = FootprintResolverOptions {
+                    fp_lib_table: effective_fp_table,
+                    kicad_config_dir: effective_config_dir,
+                    kicad_footprint_dir: effective_footprint_dir,
+                    search_dirs: effective_search_paths,
+                };
+                let fp_resolver = FootprintResolver::auto_discover_with_options(project_dir, &resolver_opts);
+
+                let lint_report = lint_source_files_with_resolver(&source_files, &fp_resolver);
                 all_diags.extend(lint_report.diagnostics);
 
                 // Run elaboration check to catch hierarchy, bus width, duplicate refdes, and IR validation errors
