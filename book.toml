@@ -11,3 +11,7 @@ build-dir = "target/book"
 git-repository-url = "https://github.com/toyoshim/kinema"
 edit-url-template = "https://github.com/toyoshim/kinema/edit/main/{path}"
 site-url = "/kinema/"
+
+[preprocessor.frontmatter]
+command = "python3 scripts/strip_frontmatter.py"
+
