@@ -189,6 +189,29 @@ LED_RED D1 (.A(PWR_IND), .K(GND));
 R #(.value("10k")) R_TEST (.A(VCC), .B(TP1));
 ```
 
+### Preserving Component Identity Across Refactoring & Import
+
+KiCad tracks PCB footprint instances by **Timestamp / UUID**, not by reference designator.
+When importing from KiCad or renumbering components (e.g. sorting `J1, J2, ...` or `R1, R2, ...`):
+
+1. **Inspect Original KiCad UUID**:
+   - In `board.kicad_pcb`: search reference to find its timestamp:
+     ```bash
+     grep -B 2 -A 5 '"Reference" "J1"' board.kicad_pcb  # look for (tstamp "<uuid>")
+     ```
+   - In `.kicad_sch`: search reference to find its symbol UUID:
+     ```bash
+     grep -B 2 -A 5 '"Reference" "J1"' *.kicad_sch      # look for (uuid "<uuid>")
+     ```
+2. **Pin the Identity in `.v`**:
+   Assign the original UUID (or stable hash) to the `id` attribute:
+   ```verilog
+   (* id = "7c25c65d-64b6-56cb-a17c-ffb79789f143" *)
+   CONN_1X04 J2 (.P1(VCC), .P2(SDA), .P3(SCL), .P4(GND)); // Safely renumbered from J1
+   ```
+3. **Safe Renumbering**:
+   Because `id` is frozen, Kinema's generated UUID remains invariant. Importing `kinema netlist` into KiCad (matching by **Timestamp / UUID**) updates the reference designator in-place on the PCB without moving footprints or disrupting routed copper tracks.
+
 ---
 
 ## Connection Model (`nearby` & `join`)
