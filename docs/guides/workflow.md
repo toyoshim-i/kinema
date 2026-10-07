@@ -69,6 +69,6 @@ kicad-cli pcb export pos --format csv -o build/cpl.csv board.kicad_pcb
 ```
 
 See also:
-- [AI Agent Guidelines](../guides/agent.md)
+- [Core Design Principles](../guides/principles.md)
 - [Language Syntax & Attributes](../guides/syntax.md)
 - [Component Identity & Refactoring](../guides/identity.md)

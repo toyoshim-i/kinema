@@ -12,14 +12,14 @@ Design printed circuit boards by writing circuit descriptions in a strict struct
 Kinema is self-documenting. Before starting any design or modification task, run:
 
 ```bash
-kinema guide agent
+kinema guide principles
 ```
 
-This retrieves your full operational commitments, guardrails, human review gates, and 7-stage workflow directly from the installed tool.
+This retrieves the core design principles, review checkpoints, and verification workflow directly from the tool.
 
 ## Key Subcommands
 
-- `kinema guide`: Browse available architectural guides (`syntax`, `connection`, `identity`, `workflow`).
+- `kinema guide`: Browse available architectural guides (`syntax`, `connection`, `identity`, `workflow`, `principles`).
 - `kinema explain <CODE>`: View root causes and concrete code remediation for any diagnostic code.
 - `kinema check`: Run iterative syntax and static lint checks.
 - `kinema check --strict`: Run full manufacturing sign-off (equivalence and DRC).

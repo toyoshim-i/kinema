@@ -22,7 +22,7 @@ mod doc;
     name = "kinema",
     version,
     about = "Circuit Description Language & KiCad Equivalence Verification Tool",
-    after_help = "AI AGENT INSTRUCTIONS:\n  Run 'kinema guide agent' to view autonomous operating commitments, guardrails, and design flow."
+    after_help = "Learn more:\n  Run 'kinema guide' to browse design workflows, syntax, and principles.\n  Run 'kinema explain <CODE>' for diagnostic remediation."
 )]
 struct Cli {
     #[command(subcommand)]
