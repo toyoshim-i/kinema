@@ -8,6 +8,9 @@ category: guide
 
 # End-to-End PCB Design & Verification Workflow
 
+> [!NOTE]
+> **Existing Project Migration (Step 0)**: If you are converting an existing KiCad project, follow the [KiCad Project Migration Guide](migration.md) first to extract footprints and pin UUIDs before starting Stage 1.
+
 Kinema completely bypasses schematic capture: your Verilog description in `src/` is the single source of truth.
 
 ## Stage 1: Requirements & Part Selection

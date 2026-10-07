@@ -98,16 +98,31 @@ impl DocEngine {
                 ));
             }
 
+            let mut getting_started = Vec::new();
             let mut guides = Vec::new();
             let mut rules = Vec::new();
             let mut others = Vec::new();
 
             for t in topics {
                 match t.category.as_str() {
+                    "getting-started" | "start" | "migration" => getting_started.push(t),
                     "guide" => guides.push(t),
                     "rule" => rules.push(t),
                     _ => others.push(t),
                 }
+            }
+
+            if !getting_started.is_empty() {
+                out.push_str("## Getting Started & Migration\n");
+                for s in getting_started {
+                    let cmd = format!("{} {} {}", self.binary_name, self.guide_subcommand, s.id);
+                    if mode == RenderMode::Terminal {
+                        out.push_str(&format!("  * \x1b[1;32m{}\x1b[0m: {} \x1b[90m(`{}`)\x1b[0m\n", s.id, s.summary, cmd));
+                    } else {
+                        out.push_str(&format!("  * **{}**: {} (`{}`)\n", s.id, s.summary, cmd));
+                    }
+                }
+                out.push('\n');
             }
 
             if !guides.is_empty() {
@@ -184,6 +199,17 @@ When refdes changes, check [Identity Guide](../guides/identity.md).
 Also check external docs at [KiCad Docs](https://docs.kicad.org).
 "#;
 
+        let migration_md = r#"---
+id: migration
+title: KiCad Migration Guide
+category: getting-started
+summary: How to migrate an existing KiCad project safely.
+---
+
+# KiCad Migration
+"#;
+
+        engine.add_page("guides/migration.md", migration_md);
         engine.add_page("guides/identity.md", guide_md);
         engine.add_page("rules/identity-missing.md", rule_md);
 
@@ -229,9 +255,16 @@ Also check external docs at [KiCad Docs](https://docs.kicad.org).
 
         // Test overview listing
         let overview = engine.guide(None, RenderMode::Agent).expect("render overview");
+        assert!(overview.contains("## Getting Started & Migration"));
         assert!(overview.contains("## Guides & Best Practices"));
         assert!(overview.contains("## Diagnostics & Rules"));
+        assert!(overview.contains("`kinema guide migration`"));
         assert!(overview.contains("`kinema guide identity`"));
         assert!(overview.contains("`kinema explain identity-missing`"));
+
+        // Verify Getting Started appears before Guides & Best Practices
+        let start_pos = overview.find("## Getting Started & Migration").unwrap();
+        let guides_pos = overview.find("## Guides & Best Practices").unwrap();
+        assert!(start_pos < guides_pos);
     }
 }

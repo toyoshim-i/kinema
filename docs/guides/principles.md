@@ -8,6 +8,10 @@ category: guide
 
 # Core Design Principles & Operating Guidelines
 
+> [!TIP]
+> **Migrating an existing KiCad project?**
+> Before authoring or refactoring existing boards, read the [KiCad Project Migration Guide](migration.md) first to ensure PCB footprints, UUIDs, and routed tracks remain intact.
+
 When developing hardware with Kinema, the following principles govern circuit authoring and verification:
 
 ## 1. Ground Truth Commitment

@@ -4,6 +4,7 @@ pub fn build_doc_engine() -> DocEngine {
     let mut engine = DocEngine::new("kinema")
         .with_subcommands("guide", "explain");
 
+    engine.add_page("guides/migration.md", include_str!("../../../docs/guides/migration.md"));
     engine.add_page("guides/principles.md", include_str!("../../../docs/guides/principles.md"));
     engine.add_page("guides/workflow.md", include_str!("../../../docs/guides/workflow.md"));
     engine.add_page("guides/syntax.md", include_str!("../../../docs/guides/syntax.md"));
