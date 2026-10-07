@@ -1,0 +1,13 @@
+[book]
+authors = ["Takashi Toyoshima"]
+language = "en"
+src = "docs"
+title = "kinema Documentation"
+
+[build]
+build-dir = "target/book"
+
+[output.html]
+git-repository-url = "https://github.com/toyoshim/kinema"
+edit-url-template = "https://github.com/toyoshim/kinema/edit/main/{path}"
+site-url = "/kinema/"
