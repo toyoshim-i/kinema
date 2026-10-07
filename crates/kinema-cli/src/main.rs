@@ -18,7 +18,12 @@ use std::process::ExitCode;
 mod doc;
 
 #[derive(Parser)]
-#[command(name = "kinema", version, about = "Circuit Description Language & KiCad Equivalence Verification Tool")]
+#[command(
+    name = "kinema",
+    version,
+    about = "Circuit Description Language & KiCad Equivalence Verification Tool",
+    after_help = "AI AGENT INSTRUCTIONS:\n  Run 'kinema guide agent' to view autonomous operating commitments, guardrails, and design flow."
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
