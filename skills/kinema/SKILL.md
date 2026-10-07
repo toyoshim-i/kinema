@@ -1,25 +1,8 @@
 ---
 name: kinema-pcb-design
-description: Design, modify, route, and verify printed circuit boards (PCBs) in KiCad using kinema, or work on KiCad PCB layouts using the kinema toolchain.
+description: Design, modify, route, and verify printed circuit boards (PCBs) in KiCad using kinema.
 ---
 
-# kinema PCB Design Guide
+# kinema
 
-Design printed circuit boards by writing circuit descriptions in a strict structural Verilog subset (`.v`) and validating them against KiCad PCB layouts using the `kinema` toolchain.
-
-## Getting Started
-
-Kinema is self-documenting. Before starting any design or modification task, run:
-
-```bash
-kinema guide principles
-```
-
-This retrieves the core design principles, review checkpoints, and verification workflow directly from the tool.
-
-## Key Subcommands
-
-- `kinema guide`: Browse available architectural guides (`syntax`, `connection`, `identity`, `workflow`, `principles`).
-- `kinema explain <CODE>`: View root causes and concrete code remediation for any diagnostic code.
-- `kinema check`: Run iterative syntax and static lint checks.
-- `kinema check --strict`: Run full manufacturing sign-off (equivalence and DRC).
+Run `kinema guide principles` to view design principles, review checkpoints, and workflows.
