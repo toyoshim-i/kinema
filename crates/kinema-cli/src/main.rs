@@ -15,6 +15,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod doc;
+
 #[derive(Parser)]
 #[command(name = "kinema", version, about = "Circuit Description Language & KiCad Equivalence Verification Tool")]
 struct Cli {
@@ -102,6 +104,28 @@ enum Commands {
         prefix: Option<String>,
         #[arg(short, long)]
         footprint: Option<String>,
+    },
+    /// View guides, best practices, and documentation topic index
+    Guide {
+        /// Topic to view (e.g. 'identity', 'connection'). If omitted, prints topic index.
+        topic: Option<String>,
+        /// Output formatted as JSON
+        #[arg(long)]
+        json: bool,
+        /// Output clean plain text without terminal formatting
+        #[arg(long)]
+        plain: bool,
+    },
+    /// Explain a diagnostic rule code or error in detail
+    Explain {
+        /// Diagnostic rule code to explain (e.g. 'identity-missing', 'decouple-missing')
+        code: String,
+        /// Output formatted as JSON
+        #[arg(long)]
+        json: bool,
+        /// Output clean plain text without terminal formatting
+        #[arg(long)]
+        plain: bool,
     },
 }
 
@@ -671,6 +695,50 @@ fn main() -> ExitCode {
             );
             ExitCode::SUCCESS
         }
+
+        Commands::Guide { topic, json, plain } => {
+            let doc_engine = doc::build_doc_engine();
+            let mode = if json {
+                agent_doc::RenderMode::Json
+            } else if plain || !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+                agent_doc::RenderMode::Agent
+            } else {
+                agent_doc::RenderMode::Terminal
+            };
+
+            match doc_engine.guide(topic.as_deref(), mode) {
+                Ok(content) => {
+                    print!("{}", content);
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                    ExitCode::from(1)
+                }
+            }
+        }
+
+        Commands::Explain { code, json, plain } => {
+            let doc_engine = doc::build_doc_engine();
+            let mode = if json {
+                agent_doc::RenderMode::Json
+            } else if plain || !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+                agent_doc::RenderMode::Agent
+            } else {
+                agent_doc::RenderMode::Terminal
+            };
+
+            match doc_engine.explain(&code, mode) {
+                Ok(content) => {
+                    print!("{}", content);
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                    ExitCode::from(1)
+                }
+            }
+        }
     }
 }
 
@@ -691,6 +759,7 @@ fn output_report(report: &LintReport, json: bool) {
             if let Some(f) = &d.fix {
                 println!("  Suggestion: {}", f);
             }
+            println!("  Help: run 'kinema explain {}' for details", d.code);
         }
     }
 }

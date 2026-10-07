@@ -248,6 +248,10 @@ C #(.value("100n")) C1 (
 
 ## Diagnostics & Troubleshooting
 
+Kinema provides built-in contextual documentation:
+- Run `kinema explain <CODE>` to inspect detailed root causes and code remediation examples.
+- Run `kinema guide [TOPIC]` to view architectural guides and topic indexes.
+
 | Diagnostic Code | Root Cause | Remediation |
 | :--- | :--- | :--- |
 | `undeclared-net` | Net identifier used without a `wire` declaration. | Declare `wire <name>;` (or fix typo). |

@@ -308,3 +308,53 @@ endmodule
 
     let _ = std::fs::remove_file(bad_verilog);
 }
+
+#[test]
+fn test_cli_guide_subcommand() {
+    // 1. Overview listing
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["guide", "--plain"])
+        .output()
+        .expect("failed to execute kinema guide");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("kinema Documentation & Topic Index"));
+    assert!(stdout.contains("kinema guide identity"));
+
+    // 2. Specific topic
+    let output_topic = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["guide", "identity", "--plain"])
+        .output()
+        .expect("failed to execute kinema guide identity");
+    assert!(output_topic.status.success());
+    let stdout_topic = String::from_utf8_lossy(&output_topic.stdout);
+    assert!(stdout_topic.contains("Component Identity"));
+    assert!(stdout_topic.contains("kinema explain identity-missing"));
+}
+
+#[test]
+fn test_cli_explain_subcommand() {
+    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["explain", "identity-missing", "--plain"])
+        .output()
+        .expect("failed to execute kinema explain");
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Rule: `identity-missing`"));
+    assert!(stdout.contains("kinema guide identity"));
+
+    // JSON mode
+    let output_json = Command::new(env!("CARGO_BIN_EXE_kinema"))
+        .current_dir(get_workspace_root())
+        .args(["explain", "identity-missing", "--json"])
+        .output()
+        .expect("failed to execute kinema explain --json");
+    assert!(output_json.status.success());
+    let stdout_json = String::from_utf8_lossy(&output_json.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout_json).expect("valid json");
+    assert_eq!(parsed["id"], "identity-missing");
+    assert_eq!(parsed["category"], "rule");
+}

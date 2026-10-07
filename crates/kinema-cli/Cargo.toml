@@ -10,6 +10,7 @@ name = "kinema"
 path = "src/main.rs"
 
 [dependencies]
+agent-doc = { workspace = true }
 kinema-syntax = { workspace = true }
 kinema-fmt = { workspace = true }
 kinema-elab = { workspace = true }

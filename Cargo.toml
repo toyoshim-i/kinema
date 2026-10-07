@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/agent-doc",
     "crates/kinema-syntax",
     "crates/kinema-fmt",
     "crates/kinema-elab",
@@ -17,6 +18,7 @@ authors = ["toyoshim", "kinema contributors"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+agent-doc = { path = "crates/agent-doc" }
 kinema-syntax = { path = "crates/kinema-syntax" }
 kinema-fmt = { path = "crates/kinema-fmt" }
 kinema-elab = { path = "crates/kinema-elab" }
