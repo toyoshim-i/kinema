@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: false
+        default: 'v0.4.0'
 
 permissions:
   contents: write
@@ -26,6 +32,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -35,4 +43,5 @@ jobs:
         with:
           bin: kinema
           target: ${{ matrix.target }}
+          ref: ${{ github.event.inputs.tag || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
