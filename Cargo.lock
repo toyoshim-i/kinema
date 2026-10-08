@@ -4,7 +4,8 @@ version = 4
 
 [[package]]
 name = "agent-doc"
-version = "0.4.0"
+version = "0.1.0"
+source = "git+https://github.com/toyoshim-i/agent-doc.git#cbbad93972d6b37ccec83e87f2b9b61dedcf81ee"
 dependencies = [
  "serde",
  "serde_json",
@@ -274,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "agent-doc",
  "clap",
@@ -292,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-elab"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "kinema-syntax",
  "serde",
@@ -303,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-equiv"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "kinema-elab",
  "kinema-kicad",
@@ -316,7 +317,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-fmt"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "kinema-syntax",
  "proptest",
@@ -325,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-kicad"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "kinema-elab",
  "kinema-syntax",
@@ -337,7 +338,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-lint"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "kinema-elab",
  "kinema-kicad",
@@ -349,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-syntax"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "proptest",
  "serde",

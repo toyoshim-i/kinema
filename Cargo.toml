@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "crates/agent-doc",
     "crates/kinema-syntax",
     "crates/kinema-fmt",
     "crates/kinema-elab",
@@ -12,13 +11,13 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["toyoshim", "kinema contributors"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-agent-doc = { path = "crates/agent-doc" }
+agent-doc = { git = "https://github.com/toyoshim-i/agent-doc.git" }
 kinema-syntax = { path = "crates/kinema-syntax" }
 kinema-fmt = { path = "crates/kinema-fmt" }
 kinema-elab = { path = "crates/kinema-elab" }
