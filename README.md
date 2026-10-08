@@ -2,6 +2,10 @@
 
 > **Circuit Description Language & KiCad Equivalence Verification Tool**
 
+[![CI](https://github.com/toyoshim-i/kinema/actions/workflows/ci.yml/badge.svg)](https://github.com/toyoshim-i/kinema/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-online_manual-blue)](https://toyoshim-i.github.io/kinema/)
+[![Release](https://img.shields.io/github/v/release/toyoshim-i/kinema)](https://github.com/toyoshim-i/kinema/releases)
+
 `kinema` is an offline hardware description toolchain written in Rust. It enables engineers and AI coding agents to design printed circuit boards (PCBs) by writing circuits in a **strict structural subset of Verilog**, bypassing graphical schematics entirely.
 
 Automated equivalence verification checks exact consistency between the circuit description and the KiCad PCB layout's pad-to-net assignments and equivalence classes. Physical copper routing continuity and clearances are verified via KiCad DRC.
@@ -25,22 +29,43 @@ Automated equivalence verification checks exact consistency between the circuit 
 
 ---
 
+## Documentation
+
+- **[Online Manual](https://toyoshim-i.github.io/kinema/)**: Web documentation generated directly from markdown sources with full-text search.
+- **In-CLI Guides**:
+  ```bash
+  # Browse topic index and architectural guides
+  kinema guide
+
+  # Step 0: Migrating an existing KiCad project safely
+  kinema guide migration
+
+  # Core design principles and operating guidelines
+  kinema guide principles
+
+  # Contextual diagnostic remediation
+  kinema explain <DIAGNOSTIC_CODE>
+  ```
+
+---
+
 ## Key Features
 
 - **Strict Structural Verilog Subset**: Only structural elements (`module`, `inout`, `wire`, `parameter`, and attributes). Zero behavioral ambiguity.
 - **Single-Binary Tooling in Rust**: No external heavy tool dependencies (such as Yosys or Python). Runs 100% offline.
+- **Self-Documenting Architecture**: Built-in `agent-doc` engine provides on-demand architectural guidance (`kinema guide`) and diagnostic remediation (`kinema explain <CODE>`), preventing LLM prompt bloat and hallucination.
 - **Fast Selective S-Expression Parser**: Parses KiCad board layouts (`.kicad_pcb`) by skipping geometry data (tracks, vias, zones) with parenthesis tracking, benchmarked at **~49 ms for a 10 MB PCB**.
 - **Deterministic Identity (UUID v5)**: Stable component tracking between circuit description and KiCad footprints using deterministic UUID v5.
 - **Pad Partition Equivalence Verification**: Verifies that electrical pad-to-net assignments and pad connectivity partitions on the PCB match the circuit description (physical copper connectivity is verified via DRC).
-- **Comprehensive Static Linter**: 31 static design rules (29 errors, 2 warnings) with structured JSON diagnostics and deterministic fix suggestions.
-- **Strict Sign-Off Mode**: `kinema check --strict` (or `--signoff`) enforces all stages including board equivalence and KiCad DRC for manufacturing readiness.
-- **AI Agent Skill Ready**: Ships with a turnkey standalone agent skill (`skills/kinema/SKILL.md`) for autonomous PCB design with Claude Code, Antigravity, Cursor, and Codex.
+- **Comprehensive Static Linter**: 31 static design rules with structured JSON diagnostics and actionable remediation instructions.
+- **Strict Sign-Off Mode**: `kinema check --strict` enforces all stages including Verilog lint, pad-to-net board equivalence, and physical KiCad DRC.
+- **Turnkey Agent Dispatcher**: Minimal 8-line skill (`skills/kinema/SKILL.md`) that delegates directly to in-CLI guidance.
 
 ---
 
 ## Workspace Architecture
 
-The project is structured as a cargo workspace containing 7 modular crates:
+The project is structured as a cargo workspace containing 8 modular crates:
 
 | Crate | Directory | Purpose |
 | :--- | :--- | :--- |
@@ -50,20 +75,24 @@ The project is structured as a cargo workspace containing 7 modular crates:
 | **`kinema-lint`** | `crates/kinema-lint` | 31 static verification rules and structured JSON diagnostic reporter. |
 | **`kinema-kicad`** | `crates/kinema-kicad` | High-speed `.kicad_pcb` parser, KiCad `.net` netlist exporter, and `.kicad_dru` generator. |
 | **`kinema-equiv`** | `crates/kinema-equiv` | Pad partition equivalence checking engine (detects missing parts, mismatched nets, and pad splits). |
+| **`agent-doc`** | `crates/agent-doc` | In-CLI documentation engine, topic indexing, and dynamic link rewriter. |
 | **`kinema-cli`** | `crates/kinema-cli` | Unified CLI binary providing all subcommands. |
 
 ---
 
 ## Installation & Build
 
-### Prerequisites
-- [Rust](https://rustup.rs/) (1.75 or later)
-- [KiCad 10](https://www.kicad.org/) (for PCB editing and DRC checks)
+### Pre-built Binaries
+Download pre-built releases for macOS (Apple Silicon & Intel), Linux (x86_64), and Windows from the [GitHub Releases](https://github.com/toyoshim-i/kinema/releases) page.
 
 ### Building from Source
 
+**Prerequisites**:
+- [Rust](https://rustup.rs/) (1.75 or later)
+- [KiCad 10](https://www.kicad.org/) (for PCB editing and DRC checks)
+
 ```bash
-git clone https://github.com/toyoshim/kinema.git
+git clone https://github.com/toyoshim-i/kinema.git
 cd kinema
 
 # Build release binary
@@ -81,6 +110,13 @@ kinema --version
 ---
 
 ## Quick Start
+
+### Step 0: Migrating an Existing KiCad Project?
+If you are converting an existing KiCad schematic and PCB to Kinema, **do not write ad-hoc Verilog from scratch**. Follow the migration playbook:
+```bash
+kinema guide migration
+```
+This preserves 100% of your existing footprint placements and routed copper tracks by extracting and pinning original KiCad UUIDs.
 
 ### 1. Project Configuration (`kinema.toml`)
 
@@ -171,6 +207,23 @@ endmodule
 
 ## CLI Reference
 
+### `kinema guide [topic]`
+Browse documentation index or view specific architectural guides:
+```bash
+kinema guide             # View topic index
+kinema guide principles  # View core operating rules & sign-off criteria
+kinema guide syntax      # View Verilog grammar & attribute table
+kinema guide migration   # View Step 0 KiCad migration playbook
+kinema guide --plain     # Output clean plain text without terminal formatting
+```
+
+### `kinema explain <CODE>`
+Explain diagnostic codes and retrieve concrete code remediation:
+```bash
+kinema explain identity-missing
+kinema explain decouple-missing
+```
+
 ### `kinema fmt`
 Format source files into canonical form (4 spaces, sorted attributes, 1-line joins):
 ```bash
@@ -189,6 +242,9 @@ kinema check --stage lint --json examples/timer_core.v
 
 # Full verification against board layout (specified in kinema.toml or CLI)
 kinema check examples/timer_core.v board.kicad_pcb
+
+# Strict manufacturing sign-off (lint + equivalence + KiCad DRC)
+kinema check --strict
 ```
 
 ### `kinema netlist`
@@ -224,52 +280,45 @@ kinema gen-leaf ATmega328P --prefix U --footprint Package_QFP:TQFP-32_7x7mm_P0.8
 
 ---
 
-## AI Agent Integration & Skill Configuration
+## AI Agent Integration: Self-Documenting Architecture
 
-`kinema` is designed from the ground up for autonomous and pair-programming AI coding agents. A standalone agent skill is provided in [skills/kinema/SKILL.md](skills/kinema/SKILL.md).
+Earlier agent toolchains relied on dumping huge skill files and rule sets into LLM prompt contexts. This caused prompt bloat, high token costs, and rule degradation over long context windows.
 
-### Registering the Skill in AI Agents
+`kinema` replaces prompt-heavy skills with a **self-documenting CLI architecture**:
 
-#### 1. Claude Code / Anthropic Agent
-Place or symlink `skills/kinema/SKILL.md` into your project skill directory:
-```bash
-mkdir -p .claude/skills/kinema
-cp skills/kinema/SKILL.md .claude/skills/kinema/SKILL.md
-```
-Or register globally in `~/.claude/skills/kinema-pcb-design/SKILL.md`.
+1. **Clean Discovery**: `kinema --help` points agents directly to `kinema guide`.
+2. **On-Demand Knowledge Retrieval**: Agents run `kinema guide principles` or `kinema guide syntax` only when needed.
+3. **Automated Diagnostic Remediation**: When a check fails, diagnostics automatically provide actionable hints:
+   ```
+   Help: run 'kinema explain identity-missing'
+   ```
+   Agents execute `kinema explain <CODE>` to obtain the root cause and concrete code fixes.
+4. **Turnkey Minimal Skill**: The provided [`skills/kinema/SKILL.md`](skills/kinema/SKILL.md) is a lightweight 8-line dispatcher that simply directs the agent to `kinema guide principles`:
+   ```markdown
+   ---
+   name: kinema-pcb-design
+   description: Design, modify, route, and verify printed circuit boards (PCBs) in KiCad using kinema.
+   ---
 
-#### 2. Antigravity / Gemini CLI
-Copy `skills/kinema/SKILL.md` to your user plugins/skills directory:
-```bash
-mkdir -p ~/.gemini/antigravity/skills/kinema-pcb-design
-cp skills/kinema/SKILL.md ~/.gemini/antigravity/skills/kinema-pcb-design/SKILL.md
-```
+   # Kinema PCB Design
 
-#### 3. Cursor / Codex / Roo Code
-Include a reference to `skills/kinema/SKILL.md` in your `.cursorrules` or project instructions:
-```markdown
-When designing or modifying circuits and PCB layouts in this repository:
-- Follow the rules and workflows defined in skills/kinema/SKILL.md.
-- Ensure all changes pass `kinema check --json`.
-```
+   Before designing or modifying circuits, run:
+   ```bash
+   kinema guide principles
+   ```
+   ```
 
-### Prompting the Agent
-Simply tell your AI agent:
-> *"Design a 3.3V to 5V I2C level shifter circuit using kinema. Follow the workflow in skills/kinema/SKILL.md."*
+### Prompting Any AI Agent
+You can prompt Claude Code, Antigravity, Cursor, Codex, or Roo Code directly:
+> *"Design a 3.3V to 5V I2C level shifter circuit using kinema. Verify with kinema check --strict."*
 
-The agent will:
-1. Discuss component selection and verify leaf modules with you.
-2. Write canonical `.v` circuit files in `src/`.
-3. Run `kinema fmt` and `kinema check --stage lint --json`.
-4. Generate the netlist and rules for KiCad import.
-5. Place/route the PCB via an MCP server (e.g., Konnect).
-6. Verify electrical equivalence with `kinema check`.
+The agent will discover available commands, read principles on-demand via `kinema guide`, and resolve errors via `kinema explain`.
 
 ---
 
 ## Testing & Verification
 
-Run the complete test suite (117 unit and integration tests across all 7 crates):
+Run the complete workspace test suite (126 unit and integration tests across all 8 crates):
 
 ```bash
 cargo test --workspace
