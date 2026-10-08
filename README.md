@@ -53,7 +53,7 @@ Automated equivalence verification checks exact consistency between the circuit 
 
 - **Strict Structural Verilog Subset**: Only structural elements (`module`, `inout`, `wire`, `parameter`, and attributes). Zero behavioral ambiguity.
 - **Single-Binary Tooling in Rust**: No external heavy tool dependencies (such as Yosys or Python). Runs 100% offline.
-- **Self-Documenting Architecture**: Built-in `agent-doc` engine provides on-demand architectural guidance (`kinema guide`) and diagnostic remediation (`kinema explain <CODE>`), preventing LLM prompt bloat and hallucination.
+- **Context-Engineering-Free Design**: Built-in self-documenting engine delivers exactly the right guidance and diagnostic remediation on-demand (`kinema guide`, `kinema explain <CODE>`), eliminating prompt engineering and context bloat.
 - **Fast Selective S-Expression Parser**: Parses KiCad board layouts (`.kicad_pcb`) by skipping geometry data (tracks, vias, zones) with parenthesis tracking, benchmarked at **~49 ms for a 10 MB PCB**.
 - **Deterministic Identity (UUID v5)**: Stable component tracking between circuit description and KiCad footprints using deterministic UUID v5.
 - **Pad Partition Equivalence Verification**: Verifies that electrical pad-to-net assignments and pad connectivity partitions on the PCB match the circuit description (physical copper connectivity is verified via DRC).
@@ -280,19 +280,17 @@ kinema gen-leaf ATmega328P --prefix U --footprint Package_QFP:TQFP-32_7x7mm_P0.8
 
 ---
 
-## AI Agent Integration: Self-Documenting Architecture
+## AI Agent Integration: Context-Engineering-Free Design
 
-Earlier agent toolchains relied on dumping huge skill files and rule sets into LLM prompt contexts. This caused prompt bloat, high token costs, and rule degradation over long context windows.
+`kinema` is built on a **context-engineering-free design**. Rather than overloading prompt contexts with manual rules and instructions, both human engineers and AI coding agents retrieve exactly what they need, when they need it, in just the right amount, through self-evident discovery interfaces:
 
-`kinema` replaces prompt-heavy skills with a **self-documenting CLI architecture**:
-
-1. **Clean Discovery**: `kinema --help` points agents directly to `kinema guide`.
-2. **On-Demand Knowledge Retrieval**: Agents run `kinema guide principles` or `kinema guide syntax` only when needed.
-3. **Automated Diagnostic Remediation**: When a check fails, diagnostics automatically provide actionable hints:
+1. **Self-Evident Discovery**: `kinema --help` points directly to `kinema guide` for architectural principles and workflows.
+2. **On-Demand Just-in-Time Retrieval**: Agents query specific topics (`kinema guide principles`, `kinema guide syntax`, `kinema guide migration`) only when needed, keeping active contexts minimal and focused.
+3. **Automated Diagnostic Remediation**: Diagnostics self-report their remediation path:
    ```
    Help: run 'kinema explain identity-missing'
    ```
-   Agents execute `kinema explain <CODE>` to obtain the root cause and concrete code fixes.
+   Running `kinema explain <CODE>` immediately delivers the exact root cause and concrete code fixes.
 4. **Turnkey Minimal Skill**: The provided [`skills/kinema/SKILL.md`](skills/kinema/SKILL.md) is a lightweight 8-line dispatcher that simply directs the agent to `kinema guide principles`:
    ```markdown
    ---
