@@ -118,7 +118,7 @@ pub enum Commands {
     Mcp,
 }
 
-fn execute_command(command: Commands) -> CommandResult {
+fn execute_command(command: Commands, default_mode: Option<agent_doc::RenderMode>) -> CommandResult {
     match command {
         Commands::Fmt { check, files } => commands::fmt::run_fmt(&files, check),
         Commands::Check {
@@ -134,6 +134,8 @@ fn execute_command(command: Commands) -> CommandResult {
         } => {
             let mode = if json {
                 agent_doc::RenderMode::Json
+            } else if let Some(m) = default_mode {
+                m
             } else if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
                 agent_doc::RenderMode::Agent
             } else {
@@ -205,40 +207,7 @@ fn run_mcp() -> ExitCode {
 
     if let Err(e) = engine.register_clap_tools(cmd, &["guide", "explain", "mcp"], |_name, matches| {
         let res = match Cli::from_arg_matches(&matches) {
-            Ok(cli) => match cli.command {
-                Commands::Check {
-                    stage,
-                    json,
-                    deny_warnings,
-                    strict,
-                    kicad_config_dir,
-                    kicad_footprint_dir,
-                    fp_lib_table,
-                    search_paths,
-                    files,
-                } => {
-                    let mode = if json {
-                        agent_doc::RenderMode::Json
-                    } else {
-                        agent_doc::RenderMode::Mcp
-                    };
-
-                    let args = commands::check::CheckArgs {
-                        stage,
-                        json,
-                        mode: Some(mode),
-                        deny_warnings,
-                        strict,
-                        kicad_config_dir,
-                        kicad_footprint_dir,
-                        fp_lib_table,
-                        search_paths,
-                        files,
-                    };
-                    commands::check::run_check(&args)
-                }
-                other => execute_command(other),
-            },
+            Ok(cli) => execute_command(cli.command, Some(agent_doc::RenderMode::Mcp)),
             Err(e) => commands::CommandResult::error(e.to_string()),
         };
 
@@ -276,7 +245,7 @@ fn main() -> ExitCode {
         return run_mcp();
     }
 
-    let result = execute_command(cli.command);
+    let result = execute_command(cli.command, None);
     result.print();
     result.exit_code()
 }

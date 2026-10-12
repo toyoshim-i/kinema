@@ -2,6 +2,7 @@ use agent_doc::DocEngine;
 
 pub fn build_doc_engine() -> DocEngine {
     let mut engine = DocEngine::new("kinema")
+        .with_version(env!("CARGO_PKG_VERSION"))
         .with_subcommands("guide", "explain");
 
     let pages: &[(&str, &str)] = &include!(concat!(env!("OUT_DIR"), "/agent_doc_pages.rs"));

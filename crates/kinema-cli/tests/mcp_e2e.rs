@@ -71,6 +71,7 @@ fn test_mcp_e2e_lifecycle_and_tools() {
     let init_resp = client.read_response();
     assert_eq!(init_resp["id"], 1);
     assert_eq!(init_resp["result"]["serverInfo"]["name"], "kinema");
+    assert_eq!(init_resp["result"]["serverInfo"]["version"], env!("CARGO_PKG_VERSION"));
 
     // Send initialized notification
     let initialized_notif = serde_json::json!({
