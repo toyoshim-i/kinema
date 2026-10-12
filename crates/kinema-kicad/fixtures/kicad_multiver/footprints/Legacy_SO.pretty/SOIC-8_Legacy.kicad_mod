@@ -1,0 +1,3 @@
+(footprint "Legacy_SO:SOIC-8_Legacy"
+  (pad "1" smd rect (at 0 0) (size 1 1))
+)

@@ -45,6 +45,21 @@ pub struct FootprintResolverOptions {
     pub search_dirs: Vec<PathBuf>,
 }
 
+pub const KICAD_FOOTPRINT_DIR_VARS: &[&str] = &[
+    "KICAD_FOOTPRINT_DIR",
+    "KICAD10_FOOTPRINT_DIR",
+    "KICAD9_FOOTPRINT_DIR",
+    "KICAD8_FOOTPRINT_DIR",
+    "KICAD7_FOOTPRINT_DIR",
+    "KISYSMOD",
+];
+
+pub fn inject_footprint_dir_vars(env_vars: &mut HashMap<String, String>, fp_dir: &str) {
+    for &var in KICAD_FOOTPRINT_DIR_VARS {
+        env_vars.insert(var.to_string(), fp_dir.to_string());
+    }
+}
+
 impl FpLibTable {
     pub fn parse(content: &str, base_dir: Option<&Path>) -> Result<Self, String> {
         Self::parse_with_env(content, base_dir, &HashMap::new())
@@ -153,20 +168,32 @@ impl FpLibTable {
         explicit_config_dir: Option<&Path>,
         explicit_footprint_dir: Option<&Path>,
     ) -> Option<Self> {
+        let is_explicit = explicit_config_dir.is_some() || std::env::var("KICAD_CONFIG_DIR").is_ok();
         let config_dir = explicit_config_dir
             .map(|p| p.to_path_buf())
             .or_else(|| std::env::var("KICAD_CONFIG_DIR").ok().map(PathBuf::from))
             .or_else(kicad_config_dir)?;
 
-        // If config_dir itself contains fp-lib-table, use it directly
-        let (version_dir, table_path) = if config_dir.join("fp-lib-table").exists() {
-            let table = config_dir.join("fp-lib-table");
-            (config_dir.clone(), table)
-        } else if let Some(v_dir) = find_latest_kicad_version_dir(&config_dir) {
-            let table = v_dir.join("fp-lib-table");
-            (v_dir, table)
+        let (version_dir, table_path) = if is_explicit {
+            if config_dir.join("fp-lib-table").exists() {
+                let table = config_dir.join("fp-lib-table");
+                (config_dir.clone(), table)
+            } else {
+                let v_dir = find_latest_kicad_version_dir(&config_dir)?;
+                let table = v_dir.join("fp-lib-table");
+                (v_dir, table)
+            }
         } else {
-            return None;
+            // Default discovery: prioritize latest version subdirectory (e.g. 10.0, 9.0)
+            if let Some(v_dir) = find_latest_kicad_version_dir(&config_dir) {
+                let table = v_dir.join("fp-lib-table");
+                (v_dir, table)
+            } else if config_dir.join("fp-lib-table").exists() {
+                let table = config_dir.join("fp-lib-table");
+                (config_dir.clone(), table)
+            } else {
+                return None;
+            }
         };
 
         if !table_path.exists() {
@@ -182,14 +209,10 @@ impl FpLibTable {
             .or_else(|| std::env::var("KICAD_FOOTPRINT_DIR").ok())
             .or_else(|| find_default_footprint_dir().map(|p| p.to_string_lossy().to_string()));
         if let Some(dir) = fp_dir {
-            env_vars.insert("KICAD_FOOTPRINT_DIR".to_string(), dir.clone());
-            env_vars.insert("KICAD10_FOOTPRINT_DIR".to_string(), dir.clone());
-            env_vars.insert("KICAD9_FOOTPRINT_DIR".to_string(), dir.clone());
-            env_vars.insert("KICAD8_FOOTPRINT_DIR".to_string(), dir.clone());
-            env_vars.insert("KICAD7_FOOTPRINT_DIR".to_string(), dir);
+            inject_footprint_dir_vars(&mut env_vars, &dir);
         }
 
-        Self::parse_with_env(&content, version_dir.parent(), &env_vars).ok()
+        Self::parse_with_env(&content, table_path.parent(), &env_vars).ok()
     }
 
     pub fn discover_global() -> Option<Self> {
@@ -207,11 +230,7 @@ impl FpLibTable {
                     .or_else(|| std::env::var("KICAD_FOOTPRINT_DIR").ok())
                     .or_else(|| find_default_footprint_dir().map(|p| p.to_string_lossy().to_string()));
                 if let Some(dir) = fp_dir {
-                    env_vars.insert("KICAD_FOOTPRINT_DIR".to_string(), dir.clone());
-                    env_vars.insert("KICAD10_FOOTPRINT_DIR".to_string(), dir.clone());
-                    env_vars.insert("KICAD9_FOOTPRINT_DIR".to_string(), dir.clone());
-                    env_vars.insert("KICAD8_FOOTPRINT_DIR".to_string(), dir.clone());
-                    env_vars.insert("KICAD7_FOOTPRINT_DIR".to_string(), dir);
+                    inject_footprint_dir_vars(&mut env_vars, &dir);
                 }
                 return Self::parse_with_env(&content, table_path.parent(), &env_vars).ok();
             }

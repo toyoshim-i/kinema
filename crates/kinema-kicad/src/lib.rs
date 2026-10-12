@@ -387,4 +387,59 @@ mod tests {
         let hs_class = classes.iter().find(|c| c["name"] == "HighSpeed").expect("HighSpeed class exists");
         assert_eq!(hs_class["track_width"], 0.254, "10mil must be converted to 0.254mm");
     }
+
+    #[test]
+    fn test_kicad_multiver_fixture_discovery_and_resolution() {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixture_dir = manifest_dir.join("fixtures/kicad_multiver");
+        let config_dir = fixture_dir.join("config");
+        let footprints_dir = fixture_dir.join("footprints");
+
+        // 1. Default discovery (using KICAD_CONFIG_HOME pointing to config):
+        // Must prioritize 10.0/ over root fp-lib-table, follow nested table, and resolve Package_SO via KICAD10_FOOTPRINT_DIR
+        let options = FootprintResolverOptions {
+            fp_lib_table: None,
+            kicad_config_dir: None,
+            kicad_footprint_dir: Some(footprints_dir.clone()),
+            search_dirs: vec![],
+        };
+
+        std::env::set_var("KICAD_CONFIG_HOME", &config_dir);
+        let resolver = FootprintResolver::auto_discover_with_options(manifest_dir, &options);
+
+        let table = resolver.table.as_ref().expect("Table must be discovered");
+        assert!(table.libraries.contains_key("Package_SO"), "Package_SO must be in 10.0 table: {:?}", table.libraries);
+        assert!(!table.libraries.contains_key("Legacy_SO"), "Legacy_SO must not be in 10.0 table");
+        assert_eq!(
+            table.libraries.get("Package_SO"),
+            Some(&footprints_dir.join("Package_SO.pretty"))
+        );
+
+        let fp = resolver.resolve("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm");
+        assert!(fp.is_ok(), "Package_SO must be resolved via 10.0 nested table in default discovery: {:?}", fp.err());
+        assert_eq!(fp.unwrap().pad_count, 8);
+
+        // 2. Explicit config dir pointing directly to config/:
+        // When explicit_config_dir is Some, it must use the root table directly and resolve Legacy_SO via KISYSMOD
+        let explicit_options = FootprintResolverOptions {
+            fp_lib_table: None,
+            kicad_config_dir: Some(config_dir),
+            kicad_footprint_dir: Some(footprints_dir.clone()),
+            search_dirs: vec![],
+        };
+        let explicit_resolver = FootprintResolver::auto_discover_with_options(manifest_dir, &explicit_options);
+        let exp_table = explicit_resolver.table.as_ref().expect("Explicit table must be discovered");
+        assert!(exp_table.libraries.contains_key("Legacy_SO"), "Legacy_SO must be in root table: {:?}", exp_table.libraries);
+        assert!(!exp_table.libraries.contains_key("Package_SO"), "Package_SO must not be in root table");
+        assert_eq!(
+            exp_table.libraries.get("Legacy_SO"),
+            Some(&footprints_dir.join("Legacy_SO.pretty"))
+        );
+
+        let legacy_fp = explicit_resolver.resolve("Legacy_SO:SOIC-8_Legacy");
+        assert!(legacy_fp.is_ok(), "Legacy_SO must be resolved via root table when config dir is explicitly specified: {:?}", legacy_fp.err());
+
+        // Clean up environment variable
+        std::env::remove_var("KICAD_CONFIG_HOME");
+    }
 }

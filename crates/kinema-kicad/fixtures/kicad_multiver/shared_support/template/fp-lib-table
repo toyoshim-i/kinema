@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "Package_SO")(type "KiCad")(uri "${KICAD10_FOOTPRINT_DIR}/Package_SO.pretty")(options "")(descr "SO packages"))
+)

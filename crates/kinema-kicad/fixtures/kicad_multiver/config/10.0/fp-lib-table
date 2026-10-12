@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "KiCad")(type "Table")(uri "../../shared_support/template/fp-lib-table")(options "")(descr "Nested KiCad 10 table"))
+)
