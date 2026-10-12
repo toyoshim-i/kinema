@@ -118,7 +118,7 @@ pub enum Commands {
     Mcp,
 }
 
-fn execute_command(command: Commands, default_mode: Option<agent_doc::RenderMode>) -> CommandResult {
+fn execute_command(command: Commands, default_mode: Option<agent_man::RenderMode>) -> CommandResult {
     match command {
         Commands::Fmt { check, files } => commands::fmt::run_fmt(&files, check),
         Commands::Check {
@@ -133,13 +133,13 @@ fn execute_command(command: Commands, default_mode: Option<agent_doc::RenderMode
             files,
         } => {
             let mode = if json {
-                agent_doc::RenderMode::Json
+                agent_man::RenderMode::Json
             } else if let Some(m) = default_mode {
                 m
             } else if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-                agent_doc::RenderMode::Agent
+                agent_man::RenderMode::Agent
             } else {
-                agent_doc::RenderMode::Terminal
+                agent_man::RenderMode::Terminal
             };
             let args = commands::check::CheckArgs {
                 stage,
@@ -167,11 +167,11 @@ fn execute_command(command: Commands, default_mode: Option<agent_doc::RenderMode
         Commands::Guide { topic, json, plain } => {
             let doc_engine = doc::build_doc_engine();
             let mode = if json {
-                agent_doc::RenderMode::Json
+                agent_man::RenderMode::Json
             } else if plain || !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-                agent_doc::RenderMode::Agent
+                agent_man::RenderMode::Agent
             } else {
-                agent_doc::RenderMode::Terminal
+                agent_man::RenderMode::Terminal
             };
 
             match doc_engine.guide(topic.as_deref(), mode) {
@@ -182,11 +182,11 @@ fn execute_command(command: Commands, default_mode: Option<agent_doc::RenderMode
         Commands::Explain { code, json, plain } => {
             let doc_engine = doc::build_doc_engine();
             let mode = if json {
-                agent_doc::RenderMode::Json
+                agent_man::RenderMode::Json
             } else if plain || !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-                agent_doc::RenderMode::Agent
+                agent_man::RenderMode::Agent
             } else {
-                agent_doc::RenderMode::Terminal
+                agent_man::RenderMode::Terminal
             };
 
             match doc_engine.explain(&code, mode) {
@@ -207,7 +207,7 @@ fn run_mcp() -> ExitCode {
 
     if let Err(e) = engine.register_clap_tools(cmd, &["guide", "explain", "mcp"], |_name, matches| {
         let res = match Cli::from_arg_matches(&matches) {
-            Ok(cli) => execute_command(cli.command, Some(agent_doc::RenderMode::Mcp)),
+            Ok(cli) => execute_command(cli.command, Some(agent_man::RenderMode::Mcp)),
             Err(e) => commands::CommandResult::error(e.to_string()),
         };
 

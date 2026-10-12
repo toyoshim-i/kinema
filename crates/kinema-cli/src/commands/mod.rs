@@ -60,7 +60,7 @@ impl CommandResult {
         }
     }
 
-    pub fn to_tool_result(&self) -> agent_doc::mcp::ToolResult {
+    pub fn to_tool_result(&self) -> agent_man::mcp::ToolResult {
         let text = if !self.stdout.is_empty() {
             &self.stdout
         } else {
@@ -68,12 +68,12 @@ impl CommandResult {
         };
         if self.success {
             if let Some(ref data) = self.data {
-                agent_doc::mcp::ToolResult::structured(text, data.clone())
+                agent_man::mcp::ToolResult::structured(text, data.clone())
             } else {
-                agent_doc::mcp::ToolResult::text(text)
+                agent_man::mcp::ToolResult::text(text)
             }
         } else {
-            let mut res = agent_doc::mcp::ToolResult::error(text);
+            let mut res = agent_man::mcp::ToolResult::error(text);
             if let Some(ref data) = self.data {
                 res.structured_content = Some(data.clone());
             }

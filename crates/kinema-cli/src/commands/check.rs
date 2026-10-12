@@ -27,7 +27,7 @@ pub enum Stage {
 pub struct CheckArgs {
     pub stage: Option<Stage>,
     pub json: bool,
-    pub mode: Option<agent_doc::RenderMode>,
+    pub mode: Option<agent_man::RenderMode>,
     pub deny_warnings: bool,
     pub strict: bool,
     pub kicad_config_dir: Option<PathBuf>,
@@ -40,11 +40,11 @@ pub struct CheckArgs {
 pub fn run_check(args: &CheckArgs) -> CommandResult {
     let mode = args.mode.unwrap_or_else(|| {
         if args.json {
-            agent_doc::RenderMode::Json
+            agent_man::RenderMode::Json
         } else if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-            agent_doc::RenderMode::Agent
+            agent_man::RenderMode::Agent
         } else {
-            agent_doc::RenderMode::Terminal
+            agent_man::RenderMode::Terminal
         }
     });
 
@@ -390,7 +390,7 @@ pub fn run_check(args: &CheckArgs) -> CommandResult {
     let has_errors = report.diagnostics.iter().any(|d| d.severity == "error");
     let has_warnings = report.diagnostics.iter().any(|d| d.severity == "warning");
 
-    if mode != agent_doc::RenderMode::Json && !has_errors && args.stage.is_none() && !args.strict && board_path.is_none() {
+    if mode != agent_man::RenderMode::Json && !has_errors && args.stage.is_none() && !args.strict && board_path.is_none() {
         output.push_str("Note: Board equivalence and DRC checks were skipped because no board file was specified. Use --strict for complete sign-off verification.\n");
     }
 

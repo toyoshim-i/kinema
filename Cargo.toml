@@ -17,7 +17,7 @@ authors = ["toyoshim", "kinema contributors"]
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-agent-doc = { git = "https://github.com/toyoshim-i/agent-doc.git" }
+agent-man = "0.4.1"
 kinema-syntax = { path = "crates/kinema-syntax" }
 kinema-fmt = { path = "crates/kinema-fmt" }
 kinema-elab = { path = "crates/kinema-elab" }

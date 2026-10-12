@@ -10,7 +10,7 @@ pub fn run_netlist(files: &[String], output: Option<PathBuf>) -> CommandResult {
     let source_files = match load_source_files(&paths) {
         Ok(f) => f,
         Err(report) => {
-            let output = format_report(&report, agent_doc::RenderMode::Json);
+            let output = format_report(&report, agent_man::RenderMode::Json);
             let data = serde_json::to_value(&report).ok();
             let mut res = CommandResult::error(output);
             res.data = data;

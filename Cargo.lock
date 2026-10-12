@@ -3,9 +3,10 @@
 version = 4
 
 [[package]]
-name = "agent-doc"
+name = "agent-man"
 version = "0.4.1"
-source = "git+https://github.com/toyoshim-i/agent-doc.git#236b52dd1df53f8ee32f189c137b522f6b70f293"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66cea57a00e7c9a5853f47df7b3c4c79e6f1ad23b1289a3adfdaded98c39802b"
 dependencies = [
  "clap",
  "serde",
@@ -333,7 +334,7 @@ dependencies = [
 name = "kinema-cli"
 version = "0.6.3"
 dependencies = [
- "agent-doc",
+ "agent-man",
  "clap",
  "glob",
  "kinema-elab",

@@ -1,11 +1,11 @@
-use agent_doc::DocEngine;
+use agent_man::DocEngine;
 
 pub fn build_doc_engine() -> DocEngine {
     let mut engine = DocEngine::new("kinema")
         .with_version(env!("CARGO_PKG_VERSION"))
         .with_subcommands("guide", "explain");
 
-    let pages: &[(&str, &str)] = &include!(concat!(env!("OUT_DIR"), "/agent_doc_pages.rs"));
+    let pages: &[(&str, &str)] = &include!(concat!(env!("OUT_DIR"), "/agent_man_pages.rs"));
     engine.add_pages(pages.iter().copied());
 
     engine
@@ -35,8 +35,8 @@ mod tests {
         let summary_path = workspace_root.join("docs/SUMMARY.md");
 
         let generated = engine.summary_md();
-        agent_doc::assert_or_bless(&summary_path, &generated)
-            .expect("SUMMARY.md is not up to date. Run with AGENT_DOC_BLESS=1 cargo test to update.");
+        agent_man::assert_or_bless(&summary_path, &generated)
+            .expect("SUMMARY.md is not up to date. Run with AGENT_MAN_BLESS=1 cargo test to update.");
     }
 
     #[test]
@@ -50,8 +50,8 @@ mod tests {
             "kinema-pcb-design",
             "Design, modify, route, and verify printed circuit boards (PCBs) in KiCad using kinema.",
         );
-        agent_doc::assert_or_bless(&skill_path, &generated)
-            .expect("SKILL.md is not up to date. Run with AGENT_DOC_BLESS=1 cargo test to update.");
+        agent_man::assert_or_bless(&skill_path, &generated)
+            .expect("SKILL.md is not up to date. Run with AGENT_MAN_BLESS=1 cargo test to update.");
     }
 
     #[test]
@@ -62,8 +62,8 @@ mod tests {
         let llms_path = workspace_root.join("llms.txt");
 
         let generated = engine.llms_txt();
-        agent_doc::assert_or_bless(&llms_path, &generated)
-            .expect("llms.txt is not up to date. Run with AGENT_DOC_BLESS=1 cargo test to update.");
+        agent_man::assert_or_bless(&llms_path, &generated)
+            .expect("llms.txt is not up to date. Run with AGENT_MAN_BLESS=1 cargo test to update.");
     }
 
     #[test]
