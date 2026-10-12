@@ -1,28 +1,41 @@
 ---
 id: missing-port
 title: "Rule: missing-port"
-summary: Required port of module instance was not connected in port list.
+summary: Port is missing from instance connection list.
 category: rule
 ---
 
 # Rule: `missing-port`
 
 ## Problem / Symptom
-Static lint detected an instantiated submodule where a declared port was omitted from the connection list.
+Static lint detected an instantiated module where one of its declared ports was omitted from the connection list:
+```text
+Port '<port>' connection missing (use .<port>() for deliberate unconnected)
+```
 
 ## Root Cause
-A module instantiation failed to connect one or more declared ports.
+Kinema requires all module ports to be explicitly accounted for at every instantiation point. Omitting a port connection is not permitted, even if the pin is left physically unconnected on the board.
 
 ## Remediation
 
-1. Connect all ports explicitly in the module instance port list:
+1. If the port connects to a net or pin-wire, add the named port connection:
    ```verilog-fragment
-   MySubmodule u1 (
-       .CLK(clk),
-       .DATA(data)
+   MyModule u1 (
+       .CLK(clk_net),
+       .DATA(data_net)
    );
    ```
-2. For unused pins, mark the corresponding port with `(* nc *)` or connect to an explicit unconnected wire.
+2. If the port is intentionally left unconnected, write the port connection with empty parentheses `.PORT()`:
+   ```verilog-fragment
+   MyModule u1 (
+       .CLK(clk_net),
+       .DATA(data_net),
+       .NC_PIN() // Deliberately unconnected
+   );
+   ```
+
+Note: Do not connect unused pins to dummy wires (which triggers `single-pin-net` or `undriven-net`), and do not use non-existent attributes like `(* nc *)`. Use `.PORT()`.
 
 See also:
 - [Circuit Description Syntax](../guides/syntax.md)
+- [Rule: nc-connected](nc-connected.md)

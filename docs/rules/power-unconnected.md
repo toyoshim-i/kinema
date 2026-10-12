@@ -1,25 +1,40 @@
 ---
 id: power-unconnected
 title: "Rule: power-unconnected"
-summary: Power input pin is unconnected.
+summary: Port with etype = "power_in" is left unconnected in instance.
 category: rule
 ---
 
 # Rule: `power-unconnected`
 
 ## Problem / Symptom
-Static lint detected an IC port marked with `etype = "power_in"` that has no connection.
+Static lint detected a component instance where an electrical power input pin was left unconnected:
+```text
+power_in pin '<instance>.<port>' is unconnected
+```
 
 ## Root Cause
-An IC power supply pin (VCC, VDD, GND, VSS) was left unconnected in the module instantiation.
+A component port declared with `(* etype = "power_in" *)` in its leaf module (such as `VCC`, `VDD`, `GND`, or `VSS`) was instantiated with empty parentheses `.PORT()`, leaving the device unpowered or ungrounded.
 
 ## Remediation
 
-1. Connect all power input pins to appropriate power and ground rails:
+1. Connect the power input port to an appropriate power rail, ground rail, or decoupling pin-wire:
    ```verilog-fragment
-   join j_u1_vcc (.P(VCC), .C(U1_VCC));
-   join j_u1_gnd (.P(GND), .C(U1_GND));
+   // NG: power_in pin left unconnected
+   // NE555 u1 (
+   //     .VCC(),
+   //     .GND(GND),
+   //     ...
+   // );
+
+   // OK: Connected to power pin-wire or net
+   NE555 u1 (
+       .VCC(u1_VCC),
+       .GND(GND),
+       ...
+   );
    ```
 
 See also:
+- [Circuit Description Syntax](../guides/syntax.md)
 - [Connection Model & Decoupling](../guides/connection.md)

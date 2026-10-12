@@ -1,22 +1,32 @@
 ---
 id: undriven-net
 title: "Rule: undriven-net"
-summary: Net has only input pins and no driving signal source.
+summary: Net has only input/passive pins and no driving source.
 category: rule
 ---
 
 # Rule: `undriven-net`
 
 ## Problem / Symptom
-Static lint detected a net connected only to input ports (`etype = "input"`), with no output or power driver.
+Static lint detected a multi-pin net that has no driving pins:
+```text
+Net '<net>' has no driving pins (only input pins)
+```
 
 ## Root Cause
-An input pin was connected to a net that is not driven by any component output or module input port.
+A declared wire connects two or more component pins, but all connected pins are marked as `input` or `passive`. The net has no source pin with a driving electrical type (`output`, `power_out`, `bidirectional`, `power_in`, `open_collector`, `open_emitter`, or `tri_state`), and the net is not connected to a module port.
 
 ## Remediation
 
-1. Connect an output, bidirectional, or power pin to drive the net.
-2. If the net is driven by an external connector, declare the driving port with `etype = "input"` or `etype = "passive"`.
+1. Connect the net to an output, power, or driver pin:
+   ```verilog-fragment
+   // Source driver: output or power
+   MCU u1 (.TX_OUT(tx_net), ...);
+   // Destination receiver: input
+   Transceiver u2 (.RX_IN(tx_net), ...);
+   ```
+2. If the net is driven from an external off-board signal, connect it to a port on the module, or ensure the input connector leaf definition has appropriate driving electrical types on its output pins.
 
 See also:
-- [Connection Model & Decoupling](../guides/connection.md)
+- [Circuit Description Syntax](../guides/syntax.md)
+- [Rule: single-pin-net](single-pin-net.md)
