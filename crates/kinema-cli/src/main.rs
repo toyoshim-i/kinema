@@ -1,4 +1,4 @@
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -203,43 +203,12 @@ fn run_mcp() -> ExitCode {
     let mut engine = doc::build_doc_engine();
     let cmd = Cli::command();
 
-    engine.register_clap_tools(cmd, &["guide", "explain", "mcp"], |name, matches| {
-        let res = match name {
-            "fmt" => {
-                let check = matches.get_flag("check");
-                let files: Vec<String> = matches
-                    .get_many::<String>("files")
-                    .map(|v| v.cloned().collect())
-                    .unwrap_or_default();
-                commands::fmt::run_fmt(&files, check)
-            }
-            "check" => {
-                let stage = matches.get_one::<Stage>("stage").cloned();
-                let json = matches.get_flag("json");
-                let deny_warnings = matches.get_flag("deny_warnings");
-                let strict = matches.get_flag("strict");
-                let kicad_config_dir = matches.get_one::<PathBuf>("kicad_config_dir").cloned();
-                let kicad_footprint_dir = matches.get_one::<PathBuf>("kicad_footprint_dir").cloned();
-                let fp_lib_table = matches.get_one::<PathBuf>("fp_lib_table").cloned();
-                let search_paths = matches
-                    .get_many::<PathBuf>("search_paths")
-                    .map(|v| v.cloned().collect())
-                    .unwrap_or_default();
-                let files: Vec<String> = matches
-                    .get_many::<String>("files")
-                    .map(|v| v.cloned().collect())
-                    .unwrap_or_default();
-
-                let mode = if json {
-                    agent_doc::RenderMode::Json
-                } else {
-                    agent_doc::RenderMode::Mcp
-                };
-
-                let args = commands::check::CheckArgs {
+    if let Err(e) = engine.register_clap_tools(cmd, &["guide", "explain", "mcp"], |_name, matches| {
+        let res = match Cli::from_arg_matches(&matches) {
+            Ok(cli) => match cli.command {
+                Commands::Check {
                     stage,
                     json,
-                    mode: Some(mode),
                     deny_warnings,
                     strict,
                     kicad_config_dir,
@@ -247,56 +216,37 @@ fn run_mcp() -> ExitCode {
                     fp_lib_table,
                     search_paths,
                     files,
-                };
-                commands::check::run_check(&args)
-            }
-            "ir" => {
-                let json = matches.get_flag("json");
-                let files: Vec<String> = matches
-                    .get_many::<String>("files")
-                    .map(|v| v.cloned().collect())
-                    .unwrap_or_default();
-                commands::ir::run_ir(&files, json)
-            }
-            "netlist" => {
-                let output = matches.get_one::<PathBuf>("output").cloned();
-                let files: Vec<String> = matches
-                    .get_many::<String>("files")
-                    .map(|v| v.cloned().collect())
-                    .unwrap_or_default();
-                commands::netlist::run_netlist(&files, output)
-            }
-            "rules" => {
-                let pro = matches.get_one::<PathBuf>("pro").cloned();
-                let dru = matches.get_one::<PathBuf>("dru").cloned();
-                let files: Vec<String> = matches
-                    .get_many::<String>("files")
-                    .map(|v| v.cloned().collect())
-                    .unwrap_or_default();
-                commands::rules::run_rules(&files, pro, dru)
-            }
-            "graph" => {
-                let json = matches.get_flag("json");
-                let files: Vec<String> = matches
-                    .get_many::<String>("files")
-                    .map(|v| v.cloned().collect())
-                    .unwrap_or_default();
-                commands::graph::run_graph(&files, json)
-            }
-            "gen-leaf" => {
-                let name = matches
-                    .get_one::<String>("name")
-                    .cloned()
-                    .unwrap_or_default();
-                let prefix = matches.get_one::<String>("prefix").map(|s| s.as_str());
-                let footprint = matches.get_one::<String>("footprint").map(|s| s.as_str());
-                commands::gen_leaf::run_gen_leaf(&name, prefix, footprint)
-            }
-            _ => commands::CommandResult::error(format!("Unknown tool: {}", name)),
+                } => {
+                    let mode = if json {
+                        agent_doc::RenderMode::Json
+                    } else {
+                        agent_doc::RenderMode::Mcp
+                    };
+
+                    let args = commands::check::CheckArgs {
+                        stage,
+                        json,
+                        mode: Some(mode),
+                        deny_warnings,
+                        strict,
+                        kicad_config_dir,
+                        kicad_footprint_dir,
+                        fp_lib_table,
+                        search_paths,
+                        files,
+                    };
+                    commands::check::run_check(&args)
+                }
+                other => execute_command(other),
+            },
+            Err(e) => commands::CommandResult::error(e.to_string()),
         };
 
         res.to_tool_result().into()
-    });
+    }) {
+        eprintln!("Error registering MCP tools: {}", e);
+        return ExitCode::from(1);
+    }
 
     for tool in &mut engine.tools {
         match tool.name.as_str() {
