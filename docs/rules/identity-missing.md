@@ -20,7 +20,7 @@ During `kinema check` (equivalence stage), a component defined in `.v` could not
 
 1. Read the [Component Identity & Refactoring Guide](../guides/identity.md) to learn how to preserve footprint identity.
 2. If the component exists on the PCB under a previous reference designator, pin its original UUID:
-   ```verilog
+   ```verilog-fragment
    (* id = "<kicad-tstamp-uuid>" *)
    CONN_1X04 J2 (...);
    ```

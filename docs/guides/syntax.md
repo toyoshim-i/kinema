@@ -49,7 +49,7 @@ endmodule
 ```
 
 ### Circuit Instances with DNP and Overrides
-```verilog
+```verilog-fragment
 (* property = "LCSC PN=C546649" *)
 LED_RED D1 (.A(PWR_IND), .K(GND));
 

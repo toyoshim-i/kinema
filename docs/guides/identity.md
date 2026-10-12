@@ -32,7 +32,7 @@ When importing from KiCad or preparing to refactor existing footprints:
 
 ### 2. Pin the Identity in Verilog
 Explicitly assign the original UUID (or a stable hash string) to the `id` attribute:
-```verilog
+```verilog-fragment
 // Frozen identity guarantees invariant UUID v5 even if instance name is renamed
 (* id = "7c25c65d-64b6-56cb-a17c-ffb79789f143" *)
 CONN_1X04 J2 (.P1(VCC), .P2(SDA), .P3(SCL), .P4(GND)); // Renamed/renumbered from J1

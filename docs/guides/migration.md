@@ -58,14 +58,14 @@ Ensure pad numbers in the leaf module match the physical KiCad footprint pads:
 ```verilog
 (* footprint = "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", prefix = "U" *)
 module NE555 (
-    (* pin = "1", etype = "power_in" *) input wire GND,
-    (* pin = "2", etype = "input" *)    input wire TRIG,
-    (* pin = "3", etype = "output" *)   output wire OUT,
-    (* pin = "4", etype = "input" *)    input wire RESET,
-    (* pin = "5", etype = "passive" *)  input wire CTRL,
-    (* pin = "6", etype = "input" *)    input wire THRES,
-    (* pin = "7", etype = "output" *)   output wire DISCH,
-    (* pin = "8", etype = "power_in" *) input wire VCC
+    (* pad = "1", etype = "power_in" *) inout GND,
+    (* pad = "2", etype = "input" *)    inout TRIG,
+    (* pad = "3", etype = "output" *)   inout OUT,
+    (* pad = "4", etype = "input" *)    inout RESET,
+    (* pad = "5", etype = "passive" *)  inout CTRL,
+    (* pad = "6", etype = "input" *)    inout THRES,
+    (* pad = "7", etype = "output" *)   inout DISCH,
+    (* pad = "8", etype = "power_in" *) inout VCC
 );
 endmodule
 ```
@@ -90,7 +90,7 @@ You will find a block like:
 ```
 
 In your Verilog description (`src/top.v`), pin this UUID using the `(* id = "..." *)` attribute:
-```verilog
+```verilog-fragment
 // Pinned UUID guarantees KiCad matches this instance to the existing PCB footprint
 (* id = "7c25c65d-64b6-56cb-a17c-ffb79789f143" *)
 NE555 U1 (
@@ -113,7 +113,7 @@ NE555 U1 (
 Write the circuit connections in `src/top.v`:
 - Use meaningful wire names for internal interconnects.
 - For decoupling capacitors, place them directly adjacent to the IC power pins and declare `(* decouple *)`:
-  ```verilog
+  ```verilog-fragment
   (* decouple, id = "b1284a1e-1284-4820-9118-84201948291a" *)
   C_0603 C1 (.P1(VCC), .P2(GND));
   ```

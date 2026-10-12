@@ -19,7 +19,7 @@ IC leaf definitions in `lib/*.v` require bypass capacitors near high-current pow
 1. Read the [Connection Model & Decoupling Guide](../guides/connection.md).
 2. Declare a local hub wire marked with `(* nearby *)`.
 3. Route the IC power pin and capacitor pin through dedicated pin-wires and join nodes:
-   ```verilog
+   ```verilog-fragment
    (* nearby *)
    wire vcc_u1;
    wire U1_VCC;

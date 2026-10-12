@@ -23,7 +23,7 @@ See [Rule: decouple-missing](../rules/decouple-missing.md) when an IC requires d
 
 ## Code Example
 
-```verilog
+```verilog-fragment
 // Bypass capacitor C1 placed immediately adjacent to U1 VCC pin
 (* nearby *)
 wire vcc_u1;
