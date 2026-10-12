@@ -1,3 +1,10 @@
+---
+id: readme
+title: Introduction
+category: intro
+summary: Overview of kinema hardware description toolchain.
+---
+
 # kinema Documentation
 
 > **Circuit Description Language & KiCad Equivalence Verification Tool**
@@ -35,6 +42,7 @@ If you are migrating an existing KiCad project, start with the migration playboo
 - **[Language Syntax & Attributes](guides/syntax.md)**: Strict structural Verilog grammar and attribute specifications.
 - **[Component Identity & Refactoring](guides/identity.md)**: Preserving PCB footprints and tracks using UUID v5 when refactoring or renumbering.
 - **[Connection Model & Decoupling](guides/connection.md)**: Sensitive routing topologies, bypass capacitors, and differential pairs.
+- **[Model Context Protocol (MCP) Setup](guides/mcp.md)**: Registering kinema as an offline MCP server for AI coding agents.
 
 ## Diagnostics & Rule References
 

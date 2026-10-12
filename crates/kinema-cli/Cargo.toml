@@ -10,7 +10,7 @@ name = "kinema"
 path = "src/main.rs"
 
 [dependencies]
-agent-doc = { workspace = true }
+agent-doc = { workspace = true, features = ["mcp-stdio", "clap"] }
 kinema-syntax = { workspace = true }
 kinema-fmt = { workspace = true }
 kinema-elab = { workspace = true }
@@ -22,3 +22,6 @@ glob = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+[build-dependencies]
+agent-doc = { workspace = true, features = ["build"] }

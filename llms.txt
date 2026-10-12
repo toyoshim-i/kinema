@@ -1,0 +1,67 @@
+# kinema
+
+## Getting Started & Migration
+- [KiCad Project Migration & Import Guide](guides/migration.md): Step 0: How to safely migrate existing KiCad schematics and PCBs to Kinema without breaking PCB layout or UUIDs.
+
+## Guides & Best Practices
+- [Connection Model, Nearby Pattern, and Decoupling](guides/connection.md): How to model sensitive routing topology such as bypass capacitors and differential pairs using nearby and join.
+- [Component Identity & Refactoring](guides/identity.md): How to preserve PCB footprint placement and tracks when renaming or renumbering components.
+- [Model Context Protocol (MCP) Integration & Setup](guides/mcp.md): How to register kinema as a Model Context Protocol (MCP) server for AI coding agents.
+- [Core Design Principles & Operating Guidelines](guides/principles.md): Ground truth commitments, verification sign-off, and review checkpoints.
+- [Language Syntax, Grammar & Essential Attributes](guides/syntax.md): The strict structural Verilog subset and essential attributes for components and nets.
+- [End-to-End PCB Design & Verification Workflow](guides/workflow.md): The 7-stage operational workflow from requirements to manufacturing sign-off.
+
+## Diagnostics & Rules
+- ["Rule: board-missing"](rules/board-missing.md): Required KiCad board file (.kicad_pcb) was not specified or not found.
+- ["Rule: component-extra"](rules/component-extra.md): Extraneous component footprint found on PCB that does not exist in circuit description.
+- ["Rule: component-missing"](rules/component-missing.md): Component defined in circuit description does not exist on the PCB layout.
+- ["Rule: constraint-conflict"](rules/constraint-conflict.md): Conflicting routing or electrical constraints applied to the same net.
+- ["Rule: decouple-missing"](rules/decouple-missing.md): Port with decouple = "required" attribute is not joined to a nearby decoupling hub.
+- ["Rule: decouple-multi-pad"](rules/decouple-multi-pad.md): Multiple pads on the same component reference incompatible decoupling roles.
+- ["Rule: diffpair-invalid"](rules/diffpair-invalid.md): Differential pair signals do not follow required naming or attribute conventions.
+- ["Rule: drc-error"](rules/drc-error.md): KiCad Design Rule Check (DRC) reported layout or clearance violations.
+- ["Rule: drc-io-error"](rules/drc-io-error.md): I/O error encountered while reading DRC report or running kicad-cli.
+- ["Rule: drc-json-error"](rules/drc-json-error.md): Failed to parse JSON report produced by kicad-cli DRC.
+- ["Rule: drc-report-missing"](rules/drc-report-missing.md): kicad-cli finished but did not produce the expected DRC JSON report file.
+- ["Rule: duplicate-identity"](rules/duplicate-identity.md): Multiple component instances share the same identity key or UUID.
+- ["Rule: duplicate-module"](rules/duplicate-module.md): Module defined multiple times across loaded source files.
+- ["Rule: elab-error"](rules/elab-error.md): Elaboration failed during module hierarchy instantiation or parameter resolution.
+- ["Rule: field-mismatch"](rules/field-mismatch.md): Component property, value, MPN, or DNP attribute does not match PCB layout.
+- ["Rule: footprint-mismatch"](rules/footprint-mismatch.md): Component footprint assignment differs between circuit description and PCB layout.
+- ["Rule: footprint-missing"](rules/footprint-missing.md): Footprint specified in leaf module not found in library table or search directories.
+- ["Rule: hub-direct-pad"](rules/hub-direct-pad.md): Direct pin-wire connection bypasses required connection hub.
+- ["Rule: hub-too-few"](rules/hub-too-few.md): Connection hub has fewer than two child branches.
+- ["Rule: identity-missing"](rules/identity-missing.md): PCB footprint timestamp does not match circuit UUID v5.
+- ["Rule: io-error"](rules/io-error.md): I/O error reading input file or accessing file system.
+- ["Rule: join-cycle"](rules/join-cycle.md): Cycle detected in join graph hierarchy.
+- ["Rule: join-name"](rules/join-name.md): Join instance name does not follow canonical naming convention.
+- ["Rule: kicad-cli-not-found"](rules/kicad-cli-not-found.md): kicad-cli executable was not found on PATH or standard install locations.
+- ["Rule: leaf-incomplete"](rules/leaf-incomplete.md): Leaf module definition is missing required attributes or valid pad mapping.
+- ["Rule: missing-port"](rules/missing-port.md): Required port of module instance was not connected in port list.
+- ["Rule: nc-connected"](rules/nc-connected.md): Port or pin marked as no-connect (nc) is connected to an active net.
+- ["Rule: nc-pad-connected"](rules/nc-pad-connected.md): No-connect pad on PCB is routed or connected to a net.
+- ["Rule: net-extra"](rules/net-extra.md): Extraneous net exists on PCB that is not defined in circuit description.
+- ["Rule: net-name-mismatch"](rules/net-name-mismatch.md): Net connectivity partition matches, but net name differs between circuit and PCB.
+- ["Rule: net-partition-mismatch"](rules/net-partition-mismatch.md): Net connectivity or partitioning does not match between circuit description and PCB layout.
+- ["Rule: not-formatted"](rules/not-formatted.md): Source file is not canonically formatted according to kinema fmt rules.
+- ["Rule: pad-count"](rules/pad-count.md): Component instance pin count does not match footprint pad count.
+- ["Rule: pad-duplicate"](rules/pad-duplicate.md): Duplicate pad number declared within the same leaf module.
+- ["Rule: param-missing"](rules/param-missing.md): Required module parameter was not provided at instantiation.
+- ["Rule: pcb-parse-error"](rules/pcb-parse-error.md): Failed to parse KiCad PCB file (.kicad_pcb) S-expression format.
+- ["Rule: pin-wire-attr"](rules/pin-wire-attr.md): Pin-wire declaration is missing electrical type or required attribute.
+- ["Rule: pin-wire-name"](rules/pin-wire-name.md): Pin-wire name does not follow canonical <REF>_<PORT> naming convention.
+- ["Rule: pin-wire-shape"](rules/pin-wire-shape.md): Pin-wire is connected to multiple component ports or has irregular topology.
+- ["Rule: power-conflict"](rules/power-conflict.md): Multiple power output pins connected together without isolation.
+- ["Rule: power-unconnected"](rules/power-unconnected.md): Power input pin is unconnected.
+- ["Rule: recursive-instance"](rules/recursive-instance.md): Recursive module instantiation detected (cycle in module hierarchy).
+- ["Rule: ref-mismatch"](rules/ref-mismatch.md): Fixed reference designator does not match PCB footprint reference.
+- ["Rule: single-pin-net"](rules/single-pin-net.md): Net has only a single connection (floating net).
+- ["Rule: syntax-error"](rules/syntax-error.md): Verilog syntax error during parsing.
+- ["Rule: top-module"](rules/top-module.md): No top module or multiple top modules found in project.
+- ["Rule: undeclared-net"](rules/undeclared-net.md): Wire or net used without declaration.
+- ["Rule: undriven-net"](rules/undriven-net.md): Net has only input pins and no driving signal source.
+- ["Rule: unit-invalid"](rules/unit-invalid.md): Invalid or missing physical engineering unit on attribute.
+- ["Rule: unknown-attr"](rules/unknown-attr.md): Unknown or misplaced attribute key.
+- ["Rule: unknown-param"](rules/unknown-param.md): Unknown parameter passed to module instance.
+- ["Rule: width-mismatch"](rules/width-mismatch.md): Bit width mismatch between connected port and wire.
+
