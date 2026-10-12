@@ -136,6 +136,11 @@ pub fn format_report(report: &LintReport, json: bool) -> String {
     } else {
         let mut out = String::new();
         let doc_engine = crate::doc::build_doc_engine();
+        let mode = if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+            agent_doc::RenderMode::Agent
+        } else {
+            agent_doc::RenderMode::Terminal
+        };
         for d in &report.diagnostics {
             let sev = if d.severity == "error" {
                 "ERROR"
@@ -151,7 +156,7 @@ pub fn format_report(report: &LintReport, json: bool) -> String {
             if let Some(f) = &d.fix {
                 out.push_str(&format!("  Suggestion: {}\n", f));
             }
-            if let Some(hint) = doc_engine.hint(&d.code) {
+            if let Some(hint) = doc_engine.hint(&d.code, mode) {
                 out.push_str(&format!("  {}\n", hint));
             }
         }
