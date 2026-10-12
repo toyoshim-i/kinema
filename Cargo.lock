@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-cli"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "agent-man",
  "clap",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-elab"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "kinema-syntax",
  "serde",
@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-equiv"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "kinema-elab",
  "kinema-kicad",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-fmt"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "kinema-syntax",
  "proptest",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-kicad"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "kinema-elab",
  "kinema-syntax",
@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-lint"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "kinema-elab",
  "kinema-kicad",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "kinema-syntax"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "proptest",
  "serde",
