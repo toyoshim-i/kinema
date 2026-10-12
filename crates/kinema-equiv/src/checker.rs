@@ -1,3 +1,4 @@
+use kinema_lint::codes;
 use kinema_elab::ir::*;
 use kinema_kicad::pcb_parser::*;
 use kinema_lint::diagnostic::*;
@@ -35,7 +36,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             matched_pcb_fps.insert(fp.tstamp.clone());
             diags.push(Diagnostic {
                 stage: "equiv".into(),
-                code: "identity-missing".into(),
+                code: codes::IDENTITY_MISSING.into(),
                 severity: "warning".into(),
                 location: None,
                 subject: Subject {
@@ -56,7 +57,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
         } else {
             diags.push(Diagnostic {
                 stage: "equiv".into(),
-                code: "component-missing".into(),
+                code: codes::COMPONENT_MISSING.into(),
                 severity: "error".into(),
                 location: None,
                 subject: Subject {
@@ -83,7 +84,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             if !comp.footprint.is_empty() && comp.footprint != fp.footprint {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
-                    code: "footprint-mismatch".into(),
+                    code: codes::FOOTPRINT_MISMATCH.into(),
                     severity: "error".into(),
                     location: None,
                     subject: Subject {
@@ -106,7 +107,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             if comp.refdes != fp.refdes {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
-                    code: "ref-mismatch".into(),
+                    code: codes::REF_MISMATCH.into(),
                     severity: "error".into(),
                     location: None,
                     subject: Subject {
@@ -130,7 +131,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                 if exp_val != &fp.value {
                     diags.push(Diagnostic {
                         stage: "equiv".into(),
-                        code: "field-mismatch".into(),
+                        code: codes::FIELD_MISMATCH.into(),
                         severity: "error".into(),
                         location: None,
                         subject: Subject {
@@ -156,7 +157,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                 if exp_mpn != actual_mpn {
                     diags.push(Diagnostic {
                         stage: "equiv".into(),
-                        code: "field-mismatch".into(),
+                        code: codes::FIELD_MISMATCH.into(),
                         severity: "error".into(),
                         location: None,
                         subject: Subject {
@@ -179,7 +180,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             if comp.dnp != fp.dnp {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
-                    code: "field-mismatch".into(),
+                    code: codes::FIELD_MISMATCH.into(),
                     severity: "error".into(),
                     location: None,
                     subject: Subject {
@@ -204,7 +205,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                 if exp_prop_val != actual_prop_val {
                     diags.push(Diagnostic {
                         stage: "equiv".into(),
-                        code: "field-mismatch".into(),
+                        code: codes::FIELD_MISMATCH.into(),
                         severity: "error".into(),
                         location: None,
                         subject: Subject {
@@ -234,7 +235,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
         if !matched_pcb_fps.contains(&fp.tstamp) {
             diags.push(Diagnostic {
                 stage: "equiv".into(),
-                code: "component-extra".into(),
+                code: codes::COMPONENT_EXTRA.into(),
                 severity: "error".into(),
                 location: None,
                 subject: Subject {
@@ -278,7 +279,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
                     if !net.is_empty() && net != "<unconnected>" {
                         diags.push(Diagnostic {
                             stage: "equiv".into(),
-                            code: "nc-pad-connected".into(),
+                            code: codes::NC_PAD_CONNECTED.into(),
                             severity: "error".into(),
                             location: None,
                             subject: Subject {
@@ -371,7 +372,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             if primary_pcb_net != ir_net.name {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
-                    code: "net-name-mismatch".into(),
+                    code: codes::NET_NAME_MISMATCH.into(),
                     severity: "error".into(),
                     location: None,
                     subject: Subject {
@@ -418,7 +419,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
 
             diags.push(Diagnostic {
                 stage: "equiv".into(),
-                code: "net-partition-mismatch".into(),
+                code: codes::NET_PARTITION_MISMATCH.into(),
                 severity: "error".into(),
                 location: None,
                 subject: Subject {
@@ -462,7 +463,7 @@ pub fn check_equivalence(ir: &FlatNetlistIR, board: &PcbBoard) -> LintReport {
             if !pad_list.is_empty() && checked_pcb_nets.insert(pcb_net_name.clone()) {
                 diags.push(Diagnostic {
                     stage: "equiv".into(),
-                    code: "net-extra".into(),
+                    code: codes::NET_EXTRA.into(),
                     severity: "error".into(),
                     location: None,
                     subject: Subject {

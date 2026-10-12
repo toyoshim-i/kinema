@@ -1,3 +1,4 @@
+pub mod codes;
 pub mod diagnostic;
 pub mod rules;
 

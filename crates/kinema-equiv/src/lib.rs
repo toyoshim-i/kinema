@@ -5,6 +5,7 @@ pub use checker::check_equivalence;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kinema_lint::codes;
     use kinema_elab::ir::*;
     use kinema_kicad::pcb_parser::*;
     use kinema_lint::diagnostic::*;
@@ -296,7 +297,7 @@ mod tests {
     fn test_equiv_diagnostic_json_omits_empty_location() {
         let diag = Diagnostic {
             stage: "equiv".into(),
-            code: "net-partition-mismatch".into(),
+            code: codes::NET_PARTITION_MISMATCH.into(),
             severity: "error".into(),
             location: None,
             subject: Subject {

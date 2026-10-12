@@ -1,3 +1,4 @@
+use crate::codes;
 use crate::diagnostic::*;
 use kinema_syntax::ast::*;
 use std::collections::{HashMap, HashSet};
@@ -32,7 +33,7 @@ pub fn check_rules_with_resolver(
             let dup = defs[1];
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "duplicate-module".into(),
+                code: codes::DUPLICATE_MODULE.into(),
                 severity: "error".into(),
                 location: Some(dup.span.to_location()),
                 subject: Subject {
@@ -89,7 +90,7 @@ pub fn check_rules_with_resolver(
                 });
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "top-module".into(),
+                code: codes::TOP_MODULE.into(),
                 severity: "error".into(),
                 location: Some(loc),
                 subject: Subject {
@@ -112,7 +113,7 @@ pub fn check_rules_with_resolver(
         let second = top_modules[1];
         diags.push(Diagnostic {
             stage: "lint".into(),
-            code: "top-module".into(),
+            code: codes::TOP_MODULE.into(),
             severity: "error".into(),
             location: Some(second.span.to_location()),
             subject: Subject {
@@ -198,7 +199,7 @@ fn check_module(
         if !has_prefix {
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "leaf-incomplete".into(),
+                code: codes::LEAF_INCOMPLETE.into(),
                 severity: "error".into(),
                 location: Some(module.span.to_location()),
                 subject: Subject {
@@ -232,7 +233,7 @@ fn check_module(
             if pad_attr.is_none() || etype_attr.is_none() {
                 diags.push(Diagnostic {
                     stage: "lint".into(),
-                    code: "leaf-incomplete".into(),
+                    code: codes::LEAF_INCOMPLETE.into(),
                     severity: "error".into(),
                     location: Some(port.span.to_location()),
                     subject: Subject {
@@ -263,7 +264,7 @@ fn check_module(
                     if is_decouple_required && pads.len() > 1 {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
-                            code: "decouple-multi-pad".into(),
+                            code: codes::DECOUPLE_MULTI_PAD.into(),
                             severity: "error".into(),
                             location: Some(port.span.to_location()),
                             subject: Subject {
@@ -291,7 +292,7 @@ fn check_module(
                         if let Some(prev_loc) = seen_pads.get(p) {
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "pad-duplicate".into(),
+                                code: codes::PAD_DUPLICATE.into(),
                                 severity: "error".into(),
                                 location: Some(port.span.to_location()),
                                 subject: Subject {
@@ -330,7 +331,7 @@ fn check_module(
                     | Err(kinema_kicad::FootprintResolveError::LibraryNotFound(_)) => {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
-                            code: "footprint-missing".into(),
+                            code: codes::FOOTPRINT_MISSING.into(),
                             severity: "error".into(),
                             location: Some(module.span.to_location()),
                             subject: Subject {
@@ -356,7 +357,7 @@ fn check_module(
                     if seen_pads.len() != expected_count {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
-                            code: "pad-count".into(),
+                            code: codes::PAD_COUNT.into(),
                             severity: "error".into(),
                             location: Some(module.span.to_location()),
                             subject: Subject {
@@ -433,7 +434,7 @@ fn check_module(
             let wire_decl = declared_wires.get(&wires[0]).unwrap();
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "diffpair-invalid".into(),
+                code: codes::DIFFPAIR_INVALID.into(),
                 severity: "error".into(),
                 location: Some(wire_decl.span.to_location()),
                 subject: Subject {
@@ -483,7 +484,7 @@ fn check_module(
                     if inst.instance_name != expected_name {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
-                            code: "join-name".into(),
+                            code: codes::JOIN_NAME.into(),
                             severity: "error".into(),
                             location: Some(inst.span.to_location()),
                             subject: Subject {
@@ -536,7 +537,7 @@ fn check_module(
         if cycle_detected {
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "join-cycle".into(),
+                code: codes::JOIN_CYCLE.into(),
                 severity: "error".into(),
                 location: Some(inst.span.to_location()),
                 subject: Subject {
@@ -596,7 +597,7 @@ fn check_module(
                         if let Some(prev_loc) = seen_ids.get(id_val) {
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "duplicate-identity".into(),
+                                code: codes::DUPLICATE_IDENTITY.into(),
                                 severity: "error".into(),
                                 location: Some(attr.span.to_location()),
                                 subject: Subject {
@@ -626,7 +627,7 @@ fn check_module(
                         if let Some(prev_loc) = seen_refs.get(ref_val) {
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "duplicate-identity".into(),
+                                code: codes::DUPLICATE_IDENTITY.into(),
                                 severity: "error".into(),
                                 location: Some(attr.span.to_location()),
                                 subject: Subject {
@@ -673,7 +674,7 @@ fn check_module(
                         if let Some(prev_loc) = seen_refs.get(&ref_val) {
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "duplicate-identity".into(),
+                                code: codes::DUPLICATE_IDENTITY.into(),
                                 severity: "error".into(),
                                 location: Some(inst.span.to_location()),
                                 subject: Subject {
@@ -734,7 +735,7 @@ fn check_module(
                 };
                 diags.push(Diagnostic {
                     stage: "lint".into(),
-                    code: "recursive-instance".into(),
+                    code: codes::RECURSIVE_INSTANCE.into(),
                     severity: "error".into(),
                     location: Some(inst.span.to_location()),
                     subject: Subject {
@@ -767,7 +768,7 @@ fn check_module(
                 if inst_fp.is_none() && leaf_fp.is_none() {
                     diags.push(Diagnostic {
                         stage: "lint".into(),
-                        code: "footprint-missing".into(),
+                        code: codes::FOOTPRINT_MISSING.into(),
                         severity: "error".into(),
                         location: Some(inst.span.to_location()),
                         subject: Subject {
@@ -790,7 +791,7 @@ fn check_module(
                         | Err(kinema_kicad::FootprintResolveError::LibraryNotFound(_)) => {
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "footprint-missing".into(),
+                                code: codes::FOOTPRINT_MISSING.into(),
                                 severity: "error".into(),
                                 location: Some(inst.span.to_location()),
                                 subject: Subject {
@@ -819,7 +820,7 @@ fn check_module(
                 if !exists {
                     diags.push(Diagnostic {
                         stage: "lint".into(),
-                        code: "unknown-param".into(),
+                        code: codes::UNKNOWN_PARAM.into(),
                         severity: "error".into(),
                         location: Some(p_ovr.span.to_location()),
                         subject: Subject {
@@ -846,7 +847,7 @@ fn check_module(
                     if !overridden {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
-                            code: "param-missing".into(),
+                            code: codes::PARAM_MISSING.into(),
                             severity: "error".into(),
                             location: Some(inst.span.to_location()),
                             subject: Subject {
@@ -873,7 +874,7 @@ fn check_module(
                 if conn_opt.is_none() {
                     diags.push(Diagnostic {
                         stage: "lint".into(),
-                        code: "missing-port".into(),
+                        code: codes::MISSING_PORT.into(),
                         severity: "error".into(),
                         location: Some(inst.span.to_location()),
                         subject: Subject {
@@ -905,7 +906,7 @@ fn check_module(
                 if port_etype == "power_in" && conn.expr.is_none() {
                     diags.push(Diagnostic {
                         stage: "lint".into(),
-                        code: "power-unconnected".into(),
+                        code: codes::POWER_UNCONNECTED.into(),
                         severity: "error".into(),
                         location: Some(conn.span.to_location()),
                         subject: Subject {
@@ -928,7 +929,7 @@ fn check_module(
                 if port_etype == "no_connect" && conn.expr.is_some() {
                     diags.push(Diagnostic {
                         stage: "lint".into(),
-                        code: "nc-connected".into(),
+                        code: codes::NC_CONNECTED.into(),
                         severity: "error".into(),
                         location: Some(conn.span.to_location()),
                         subject: Subject {
@@ -965,7 +966,7 @@ fn check_module(
                         if !is_declared {
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "undeclared-net".into(),
+                                code: codes::UNDECLARED_NET.into(),
                                 severity: "error".into(),
                                 location: Some(conn.span.to_location()),
                                 subject: Subject {
@@ -989,7 +990,7 @@ fn check_module(
                             let hub_decl = declared_wires.get(&w).unwrap();
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "hub-direct-pad".into(),
+                                code: codes::HUB_DIRECT_PAD.into(),
                                 severity: "error".into(),
                                 location: Some(conn.span.to_location()),
                                 subject: Subject {
@@ -1048,7 +1049,7 @@ fn check_module(
                                 let wire_decl = declared_wires.get(&w);
                                 diags.push(Diagnostic {
                                     stage: "lint".into(),
-                                    code: "pin-wire-name".into(),
+                                    code: codes::PIN_WIRE_NAME.into(),
                                     severity: "error".into(),
                                     location: Some(conn.span.to_location()),
                                     subject: Subject {
@@ -1084,7 +1085,7 @@ fn check_module(
                         if is_decouple_required && !is_hub_child {
                             diags.push(Diagnostic {
                                 stage: "lint".into(),
-                                code: "decouple-missing".into(),
+                                code: codes::DECOUPLE_MISSING.into(),
                                 severity: "error".into(),
                                 location: Some(conn.span.to_location()),
                                 subject: Subject {
@@ -1162,7 +1163,7 @@ fn check_module(
                     if let Some(oob_msg) = out_of_bounds {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
-                            code: "width-mismatch".into(),
+                            code: codes::WIDTH_MISMATCH.into(),
                             severity: "error".into(),
                             location: Some(conn.span.to_location()),
                             subject: Subject {
@@ -1182,7 +1183,7 @@ fn check_module(
                     } else if port_width != conn_width {
                         diags.push(Diagnostic {
                             stage: "lint".into(),
-                            code: "width-mismatch".into(),
+                            code: codes::WIDTH_MISMATCH.into(),
                             severity: "error".into(),
                             location: Some(conn.span.to_location()),
                             subject: Subject {
@@ -1213,7 +1214,7 @@ fn check_module(
             let wire_decl = declared_wires.get(wire_name);
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "pin-wire-shape".into(),
+                code: codes::PIN_WIRE_SHAPE.into(),
                 severity: "error".into(),
                 location: Some(wire_decl.map(|w| w.span.to_location()).unwrap_or(module.span.to_location())),
                 subject: Subject {
@@ -1272,7 +1273,7 @@ fn check_module(
             if vals.len() > 1 && vals.windows(2).any(|w| w[0].0 != w[1].0) {
                 diags.push(Diagnostic {
                     stage: "lint".into(),
-                    code: "constraint-conflict".into(),
+                    code: codes::CONSTRAINT_CONFLICT.into(),
                     severity: "error".into(),
                     location: Some(vals[1].1.clone()),
                     subject: Subject {
@@ -1303,7 +1304,7 @@ fn check_module(
             if !wire.attrs.is_empty() {
                 diags.push(Diagnostic {
                     stage: "lint".into(),
-                    code: "pin-wire-attr".into(),
+                    code: codes::PIN_WIRE_ATTR.into(),
                     severity: "error".into(),
                     location: Some(wire.span.to_location()),
                     subject: Subject {
@@ -1334,7 +1335,7 @@ fn check_module(
         if members < 2 {
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "hub-too-few".into(),
+                code: codes::HUB_TOO_FEW.into(),
                 severity: "error".into(),
                 location: Some(hub_wire.span.to_location()),
                 subject: Subject {
@@ -1363,7 +1364,7 @@ fn check_module(
         if locations.len() > 1 {
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "power-conflict".into(),
+                code: codes::POWER_CONFLICT.into(),
                 severity: "error".into(),
                 location: Some(locations[1].clone()),
                 subject: Subject {
@@ -1397,7 +1398,7 @@ fn check_module(
             let loc = declared_wires.get(net_name).map(|w| w.span.to_location()).unwrap_or(module.span.to_location());
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "single-pin-net".into(),
+                code: codes::SINGLE_PIN_NET.into(),
                 severity: "warning".into(),
                 location: Some(loc),
                 subject: Subject {
@@ -1424,7 +1425,7 @@ fn check_module(
             let loc = declared_wires.get(net_name).map(|w| w.span.to_location()).unwrap_or(module.span.to_location());
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "undriven-net".into(),
+                code: codes::UNDRIVEN_NET.into(),
                 severity: "warning".into(),
                 location: Some(loc),
                 subject: Subject {
@@ -1481,7 +1482,7 @@ fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut 
     if !valid {
         diags.push(Diagnostic {
             stage: "lint".into(),
-            code: "unknown-attr".into(),
+            code: codes::UNKNOWN_ATTR.into(),
             severity: "error".into(),
             location: Some(attr.span.to_location()),
             subject: Subject {
@@ -1503,7 +1504,7 @@ fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut 
             if !VALID_ETYPES.contains(&val.as_str()) {
                 diags.push(Diagnostic {
                     stage: "lint".into(),
-                    code: "unknown-attr".into(),
+                    code: codes::UNKNOWN_ATTR.into(),
                     severity: "error".into(),
                     location: Some(attr.span.to_location()),
                     subject: Subject {
@@ -1536,7 +1537,7 @@ fn check_attr_target(attr: &Attr, target_kind: &str, is_leaf: bool, diags: &mut 
         if !is_valid_format {
             diags.push(Diagnostic {
                 stage: "lint".into(),
-                code: "unknown-attr".into(),
+                code: codes::UNKNOWN_ATTR.into(),
                 severity: "error".into(),
                 location: Some(attr.span.to_location()),
                 subject: Subject {
@@ -1565,7 +1566,7 @@ fn check_unit(attr: &Attr, diags: &mut Vec<Diagnostic>) {
             if !valid {
                 diags.push(Diagnostic {
                     stage: "lint".into(),
-                    code: "unit-invalid".into(),
+                    code: codes::UNIT_INVALID.into(),
                     severity: "error".into(),
                     location: Some(attr.span.to_location()),
                     subject: Subject {
@@ -1591,7 +1592,7 @@ fn check_unit(attr: &Attr, diags: &mut Vec<Diagnostic>) {
             if !valid {
                 diags.push(Diagnostic {
                     stage: "lint".into(),
-                    code: "unit-invalid".into(),
+                    code: codes::UNIT_INVALID.into(),
                     severity: "error".into(),
                     location: Some(attr.span.to_location()),
                     subject: Subject {
