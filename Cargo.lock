@@ -4,8 +4,8 @@ version = 4
 
 [[package]]
 name = "agent-doc"
-version = "0.3.1"
-source = "git+https://github.com/toyoshim-i/agent-doc.git#14bc224e04398fb83a8a46fe0b7f01137edc3716"
+version = "0.4.0"
+source = "git+https://github.com/toyoshim-i/agent-doc.git#fcb49e138167e4aa9596cee056632481fdc1212d"
 dependencies = [
  "clap",
  "serde",
