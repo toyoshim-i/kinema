@@ -13,8 +13,11 @@ struct McpTestClient {
 
 impl McpTestClient {
     fn new() -> Self {
+        let empty_dir = get_workspace_root().join("target/empty_kicad_config");
+        let _ = std::fs::create_dir_all(&empty_dir);
         let mut child = Command::new(env!("CARGO_BIN_EXE_kinema"))
             .current_dir(get_workspace_root())
+            .env("KICAD_CONFIG_HOME", &empty_dir)
             .arg("mcp")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -215,4 +218,137 @@ fn test_mcp_e2e_lifecycle_and_tools() {
         "Diagnostic hint in MCP must NOT suggest 'kinema explain', but got: {}",
         bad_output_text
     );
+
+    // 7. tools/call fmt with check: true on examples/timer_core.v
+    let fmt_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "tools/call",
+        "params": {
+            "name": "fmt",
+            "arguments": {
+                "check": true,
+                "files": ["examples/timer_core.v"]
+            }
+        }
+    });
+    client.send_request(&fmt_req);
+    let fmt_resp = client.read_response();
+    assert_eq!(fmt_resp["id"], 7);
+    let fmt_result = &fmt_resp["result"];
+    assert!(!fmt_result["isError"].as_bool().unwrap_or(false), "fmt tool must not be error: {:?}", fmt_result);
+    let fmt_text = fmt_result["content"][0]["text"].as_str().unwrap_or("");
+    assert!(
+        fmt_text.contains("canonically formatted") || fmt_text.contains("already formatted"),
+        "fmt output must describe result rather than being empty: {}",
+        fmt_text
+    );
+
+    // 8. tools/call ir on examples/timer_core.v
+    let ir_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "tools/call",
+        "params": {
+            "name": "ir",
+            "arguments": {
+                "files": ["examples/timer_core.v"]
+            }
+        }
+    });
+    client.send_request(&ir_req);
+    let ir_resp = client.read_response();
+    assert_eq!(ir_resp["id"], 8);
+    let ir_result = &ir_resp["result"];
+    assert!(!ir_result["isError"].as_bool().unwrap_or(false), "ir tool must not be error: {:?}", ir_result);
+    assert!(ir_result["structuredContent"].get("top_module").is_some());
+
+    // 9. tools/call netlist with output path in target/
+    let out_net = get_workspace_root().join("target/mcp_test_timer.net");
+    let netlist_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+            "name": "netlist",
+            "arguments": {
+                "output": out_net.to_str().unwrap(),
+                "files": ["examples/timer_core.v"]
+            }
+        }
+    });
+    client.send_request(&netlist_req);
+    let netlist_resp = client.read_response();
+    assert_eq!(netlist_resp["id"], 9);
+    let netlist_result = &netlist_resp["result"];
+    assert!(!netlist_result["isError"].as_bool().unwrap_or(false), "netlist tool must not be error: {:?}", netlist_result);
+    assert!(out_net.exists(), "Exported netlist file must exist");
+    let _ = std::fs::remove_file(&out_net);
+
+    // 10. tools/call rules with pro and dru paths in target/
+    let out_pro = get_workspace_root().join("target/mcp_test_timer.kicad_pro");
+    let out_dru = get_workspace_root().join("target/mcp_test_timer.kicad_dru");
+    let rules_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "rules",
+            "arguments": {
+                "pro": out_pro.to_str().unwrap(),
+                "dru": out_dru.to_str().unwrap(),
+                "files": ["examples/timer_core.v"]
+            }
+        }
+    });
+    client.send_request(&rules_req);
+    let rules_resp = client.read_response();
+    assert_eq!(rules_resp["id"], 10);
+    let rules_result = &rules_resp["result"];
+    assert!(!rules_result["isError"].as_bool().unwrap_or(false), "rules tool must not be error: {:?}", rules_result);
+    assert!(out_pro.exists(), "Exported kicad_pro must exist");
+    assert!(out_dru.exists(), "Exported kicad_dru must exist");
+    let _ = std::fs::remove_file(&out_pro);
+    let _ = std::fs::remove_file(&out_dru);
+
+    // 11. tools/call graph on examples/timer_core.v
+    let graph_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+            "name": "graph",
+            "arguments": {
+                "files": ["examples/timer_core.v"]
+            }
+        }
+    });
+    client.send_request(&graph_req);
+    let graph_resp = client.read_response();
+    assert_eq!(graph_resp["id"], 11);
+    let graph_result = &graph_resp["result"];
+    assert!(!graph_result["isError"].as_bool().unwrap_or(false), "graph tool must not be error: {:?}", graph_result);
+    assert!(graph_result["structuredContent"].get("modules").is_some());
+
+    // 12. tools/call gen-leaf
+    let gen_leaf_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 12,
+        "method": "tools/call",
+        "params": {
+            "name": "gen-leaf",
+            "arguments": {
+                "name": "ATmega328P",
+                "prefix": "U",
+                "footprint": "Package_QFP:TQFP-32_7x7mm_P0.8mm"
+            }
+        }
+    });
+    client.send_request(&gen_leaf_req);
+    let gen_leaf_resp = client.read_response();
+    assert_eq!(gen_leaf_resp["id"], 12);
+    let gen_leaf_result = &gen_leaf_resp["result"];
+    assert!(!gen_leaf_result["isError"].as_bool().unwrap_or(false), "gen-leaf tool must not be error: {:?}", gen_leaf_result);
+    let gen_leaf_text = gen_leaf_result["content"][0]["text"].as_str().unwrap_or("");
+    assert!(gen_leaf_text.contains("module ATmega328P"), "gen-leaf must output module definition: {}", gen_leaf_text);
 }

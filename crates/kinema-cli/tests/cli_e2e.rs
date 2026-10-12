@@ -5,10 +5,18 @@ fn get_workspace_root() -> &'static Path {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../"))
 }
 
+fn kinema_cmd() -> Command {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_kinema"));
+    cmd.current_dir(get_workspace_root());
+    let empty_dir = get_workspace_root().join("target/empty_kicad_config");
+    let _ = std::fs::create_dir_all(&empty_dir);
+    cmd.env("KICAD_CONFIG_HOME", &empty_dir);
+    cmd
+}
+
 #[test]
 fn test_cli_fmt_check() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["fmt", "examples/timer_core.v", "--check"])
         .output()
         .expect("failed to execute kinema fmt");
@@ -17,8 +25,7 @@ fn test_cli_fmt_check() {
 
 #[test]
 fn test_cli_check_lint_json() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--stage", "lint", "--json", "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema check");
@@ -31,8 +38,7 @@ fn test_cli_check_lint_json() {
 
 #[test]
 fn test_cli_check_stage_fmt_clean() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--stage", "fmt", "--json", "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema check");
@@ -48,8 +54,7 @@ fn test_cli_check_stage_fmt_unformatted() {
     let unformatted_path = get_workspace_root().join("target/unformatted_test.v");
     std::fs::write(&unformatted_path, "module  bad_indent  () ;\nendmodule\n").unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--stage", "fmt", "--json", "target/unformatted_test.v"])
         .output()
         .expect("failed to execute kinema check");
@@ -66,8 +71,7 @@ fn test_cli_check_stage_fmt_unformatted() {
 
 #[test]
 fn test_cli_check_stage_drc_missing_board() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--stage", "drc", "--json", "non_existent_board.kicad_pcb"])
         .output()
         .expect("failed to execute kinema check");
@@ -83,8 +87,7 @@ fn test_cli_check_stage_drc_missing_board() {
 #[test]
 fn test_cli_netlist_export() {
     let out_path = "target/cli_test_timer.net";
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["netlist", "-o", out_path, "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema netlist");
@@ -99,8 +102,7 @@ fn test_cli_netlist_export() {
 
 #[test]
 fn test_cli_ir_json() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["ir", "--json", "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema ir");
@@ -117,8 +119,7 @@ fn test_cli_rules() {
     let temp_dir = std::env::temp_dir();
     let pro_file = temp_dir.join("test_rules.kicad_pro");
     let dru_file = temp_dir.join("test_rules.kicad_dru");
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args([
             "rules",
             "--pro",
@@ -136,8 +137,7 @@ fn test_cli_rules() {
 
 #[test]
 fn test_cli_graph() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["graph", "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema graph");
@@ -165,8 +165,7 @@ fn test_cli_graph() {
 
 #[test]
 fn test_cli_gen_leaf() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["gen-leaf", "ATmega328P", "--prefix", "U", "--footprint", "Package_QFP:TQFP-32_7x7mm_P0.8mm"])
         .output()
         .expect("failed to execute kinema gen-leaf");
@@ -179,8 +178,7 @@ fn test_cli_gen_leaf() {
 
 #[test]
 fn test_cli_check_strict_missing_board() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--strict", "--json", "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema check");
@@ -195,8 +193,7 @@ fn test_cli_check_strict_missing_board() {
 
 #[test]
 fn test_cli_check_signoff_alias_missing_board() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--signoff", "--json", "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema check");
@@ -211,8 +208,7 @@ fn test_cli_check_signoff_alias_missing_board() {
 
 #[test]
 fn test_cli_check_normal_skip_note() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "examples/timer_core.v"])
         .output()
         .expect("failed to execute kinema check");
@@ -224,8 +220,7 @@ fn test_cli_check_normal_skip_note() {
 
 #[test]
 fn test_cli_check_specified_board_missing() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--json", "examples/timer_core.v", "nonexistent.kicad_pcb"])
         .output()
         .expect("failed to execute kinema check");
@@ -240,8 +235,7 @@ fn test_cli_check_specified_board_missing() {
 
 #[test]
 fn test_cli_check_matching_board() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args([
             "check",
             "--json",
@@ -262,8 +256,7 @@ fn test_cli_check_matching_board() {
 
 #[test]
 fn test_cli_check_misconnected_board() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args([
             "check",
             "--json",
@@ -293,8 +286,7 @@ module top ();
 endmodule
 "#).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["check", "--stage", "lint", "--json", "target/bad_dup_refdes.v"])
         .output()
         .expect("failed to execute kinema check");
@@ -312,8 +304,7 @@ endmodule
 #[test]
 fn test_cli_guide_subcommand() {
     // 1. Overview listing
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["guide", "--plain"])
         .output()
         .expect("failed to execute kinema guide");
@@ -323,8 +314,7 @@ fn test_cli_guide_subcommand() {
     assert!(stdout.contains("kinema guide identity"));
 
     // 2. Specific topic
-    let output_topic = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output_topic = kinema_cmd()
         .args(["guide", "identity", "--plain"])
         .output()
         .expect("failed to execute kinema guide identity");
@@ -336,8 +326,7 @@ fn test_cli_guide_subcommand() {
 
 #[test]
 fn test_cli_explain_subcommand() {
-    let output = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output = kinema_cmd()
         .args(["explain", "identity-missing", "--plain"])
         .output()
         .expect("failed to execute kinema explain");
@@ -347,8 +336,7 @@ fn test_cli_explain_subcommand() {
     assert!(stdout.contains("kinema guide identity"));
 
     // JSON mode
-    let output_json = Command::new(env!("CARGO_BIN_EXE_kinema"))
-        .current_dir(get_workspace_root())
+    let output_json = kinema_cmd()
         .args(["explain", "identity-missing", "--json"])
         .output()
         .expect("failed to execute kinema explain --json");

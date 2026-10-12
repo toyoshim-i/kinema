@@ -44,6 +44,13 @@ pub fn run_fmt(files: &[String], check: bool) -> CommandResult {
             data: None,
         }
     } else {
+        if stdout.is_empty() {
+            if check {
+                stdout = "All files are canonically formatted.\n".to_string();
+            } else {
+                stdout = "All files are already formatted (no changes).\n".to_string();
+            }
+        }
         CommandResult {
             stdout,
             stderr,
