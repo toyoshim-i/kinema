@@ -128,19 +128,14 @@ pub fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, LintRepor
     }
 }
 
-pub fn format_report(report: &LintReport, json: bool) -> String {
-    if json {
+pub fn format_report(report: &LintReport, mode: agent_doc::RenderMode) -> String {
+    if mode == agent_doc::RenderMode::Json {
         format!("{}\n", serde_json::to_string_pretty(report).unwrap_or_default())
     } else if report.diagnostics.is_empty() {
         "All checks passed (0 errors, 0 warnings).\n".to_string()
     } else {
         let mut out = String::new();
         let doc_engine = crate::doc::build_doc_engine();
-        let mode = if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
-            agent_doc::RenderMode::Agent
-        } else {
-            agent_doc::RenderMode::Terminal
-        };
         for d in &report.diagnostics {
             let sev = if d.severity == "error" {
                 "ERROR"

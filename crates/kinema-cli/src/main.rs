@@ -132,9 +132,17 @@ fn execute_command(command: Commands) -> CommandResult {
             search_paths,
             files,
         } => {
+            let mode = if json {
+                agent_doc::RenderMode::Json
+            } else if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+                agent_doc::RenderMode::Agent
+            } else {
+                agent_doc::RenderMode::Terminal
+            };
             let args = commands::check::CheckArgs {
                 stage,
                 json,
+                mode: Some(mode),
                 deny_warnings,
                 strict,
                 kicad_config_dir,
@@ -222,9 +230,16 @@ fn run_mcp() -> ExitCode {
                     .map(|v| v.cloned().collect())
                     .unwrap_or_default();
 
+                let mode = if json {
+                    agent_doc::RenderMode::Json
+                } else {
+                    agent_doc::RenderMode::Mcp
+                };
+
                 let args = commands::check::CheckArgs {
                     stage,
                     json,
+                    mode: Some(mode),
                     deny_warnings,
                     strict,
                     kicad_config_dir,

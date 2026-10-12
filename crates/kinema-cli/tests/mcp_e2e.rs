@@ -182,4 +182,36 @@ fn test_mcp_e2e_lifecycle_and_tools() {
         "doc_read content must contain link to identity-missing: {}",
         doc_content
     );
+
+    // 6. tools/call check with file containing syntax error: diagnostic hint must format for MCP
+    let bad_file = get_workspace_root().join("target/bad_syntax_test.v");
+    std::fs::write(&bad_file, "module bad (;\n").unwrap();
+    let check_bad_req = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "tools/call",
+        "params": {
+            "name": "check",
+            "arguments": {
+                "files": [bad_file.to_str().unwrap()]
+            }
+        }
+    });
+    client.send_request(&check_bad_req);
+    let check_bad_resp = client.read_response();
+    let _ = std::fs::remove_file(&bad_file);
+    assert_eq!(check_bad_resp["id"], 6);
+    let check_bad_result = &check_bad_resp["result"];
+    assert_eq!(check_bad_result["isError"], true);
+    let bad_output_text = check_bad_result["content"][0]["text"].as_str().unwrap_or("");
+    assert!(
+        bad_output_text.contains("Help: call tool 'doc_read {\"id\": \"syntax-error\"}'"),
+        "Diagnostic hint in MCP must use Mcp render mode, but got: {}",
+        bad_output_text
+    );
+    assert!(
+        !bad_output_text.contains("kinema explain"),
+        "Diagnostic hint in MCP must NOT suggest 'kinema explain', but got: {}",
+        bad_output_text
+    );
 }

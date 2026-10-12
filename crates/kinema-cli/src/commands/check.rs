@@ -27,6 +27,7 @@ pub enum Stage {
 pub struct CheckArgs {
     pub stage: Option<Stage>,
     pub json: bool,
+    pub mode: Option<agent_doc::RenderMode>,
     pub deny_warnings: bool,
     pub strict: bool,
     pub kicad_config_dir: Option<PathBuf>,
@@ -37,11 +38,21 @@ pub struct CheckArgs {
 }
 
 pub fn run_check(args: &CheckArgs) -> CommandResult {
+    let mode = args.mode.unwrap_or_else(|| {
+        if args.json {
+            agent_doc::RenderMode::Json
+        } else if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+            agent_doc::RenderMode::Agent
+        } else {
+            agent_doc::RenderMode::Terminal
+        }
+    });
+
     let (paths, board_path) = resolve_project_sources(&args.files);
     let source_files = match load_source_files(&paths) {
         Ok(f) => f,
         Err(report) => {
-            let output = format_report(&report, args.json);
+            let output = format_report(&report, mode);
             let data = serde_json::to_value(&report).ok();
             return CommandResult {
                 stdout: output,
@@ -57,7 +68,7 @@ pub fn run_check(args: &CheckArgs) -> CommandResult {
     // 1. Parse stage only: already verified by load_source_files
     if args.stage == Some(Stage::Parse) {
         let report = LintReport::from_diagnostics(all_diags);
-        let output = format_report(&report, args.json);
+        let output = format_report(&report, mode);
         let data = serde_json::to_value(&report).ok();
         let mut res = CommandResult::success(output);
         res.data = data;
@@ -373,12 +384,12 @@ pub fn run_check(args: &CheckArgs) -> CommandResult {
     }
 
     let report = LintReport::from_diagnostics(all_diags);
-    let mut output = format_report(&report, args.json);
+    let mut output = format_report(&report, mode);
 
     let has_errors = report.diagnostics.iter().any(|d| d.severity == "error");
     let has_warnings = report.diagnostics.iter().any(|d| d.severity == "warning");
 
-    if !args.json && !has_errors && args.stage.is_none() && !args.strict && board_path.is_none() {
+    if mode != agent_doc::RenderMode::Json && !has_errors && args.stage.is_none() && !args.strict && board_path.is_none() {
         output.push_str("Note: Board equivalence and DRC checks were skipped because no board file was specified. Use --strict for complete sign-off verification.\n");
     }
 

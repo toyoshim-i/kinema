@@ -8,7 +8,7 @@ pub fn run_graph(files: &[String], _json: bool) -> CommandResult {
     let source_files = match load_source_files(&paths) {
         Ok(f) => f,
         Err(report) => {
-            let output = format_report(&report, true);
+            let output = format_report(&report, agent_doc::RenderMode::Json);
             let data = serde_json::to_value(&report).ok();
             let mut res = CommandResult::error(output);
             res.data = data;
