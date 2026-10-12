@@ -1,113 +1,73 @@
 //! Diagnostic code constants and comprehensive list across kinema.
 
-pub const BOARD_MISSING: &str = "board-missing";
-pub const COMPONENT_EXTRA: &str = "component-extra";
-pub const COMPONENT_MISSING: &str = "component-missing";
-pub const CONSTRAINT_CONFLICT: &str = "constraint-conflict";
-pub const DECOUPLE_MISSING: &str = "decouple-missing";
-pub const DECOUPLE_MULTI_PAD: &str = "decouple-multi-pad";
-pub const DIFFPAIR_INVALID: &str = "diffpair-invalid";
-pub const DRC_ERROR: &str = "drc-error";
-pub const DRC_IO_ERROR: &str = "drc-io-error";
-pub const DRC_JSON_ERROR: &str = "drc-json-error";
-pub const DRC_REPORT_MISSING: &str = "drc-report-missing";
-pub const DUPLICATE_IDENTITY: &str = "duplicate-identity";
-pub const DUPLICATE_MODULE: &str = "duplicate-module";
-pub const ELAB_ERROR: &str = "elab-error";
-pub const FIELD_MISMATCH: &str = "field-mismatch";
-pub const FOOTPRINT_MISMATCH: &str = "footprint-mismatch";
-pub const FOOTPRINT_MISSING: &str = "footprint-missing";
-pub const HUB_DIRECT_PAD: &str = "hub-direct-pad";
-pub const HUB_TOO_FEW: &str = "hub-too-few";
-pub const IDENTITY_MISSING: &str = "identity-missing";
-pub const IO_ERROR: &str = "io-error";
-pub const JOIN_CYCLE: &str = "join-cycle";
-pub const JOIN_NAME: &str = "join-name";
-pub const KICAD_CLI_NOT_FOUND: &str = "kicad-cli-not-found";
-pub const LEAF_INCOMPLETE: &str = "leaf-incomplete";
-pub const MISSING_PORT: &str = "missing-port";
-pub const NC_CONNECTED: &str = "nc-connected";
-pub const NC_PAD_CONNECTED: &str = "nc-pad-connected";
-pub const NET_EXTRA: &str = "net-extra";
-pub const NET_NAME_MISMATCH: &str = "net-name-mismatch";
-pub const NET_PARTITION_MISMATCH: &str = "net-partition-mismatch";
-pub const NOT_FORMATTED: &str = "not-formatted";
-pub const PAD_COUNT: &str = "pad-count";
-pub const PAD_DUPLICATE: &str = "pad-duplicate";
-pub const PARAM_MISSING: &str = "param-missing";
-pub const PCB_PARSE_ERROR: &str = "pcb-parse-error";
-pub const PIN_WIRE_ATTR: &str = "pin-wire-attr";
-pub const PIN_WIRE_NAME: &str = "pin-wire-name";
-pub const PIN_WIRE_SHAPE: &str = "pin-wire-shape";
-pub const POWER_CONFLICT: &str = "power-conflict";
-pub const POWER_UNCONNECTED: &str = "power-unconnected";
-pub const RECURSIVE_INSTANCE: &str = "recursive-instance";
-pub const REF_MISMATCH: &str = "ref-mismatch";
-pub const SINGLE_PIN_NET: &str = "single-pin-net";
-pub const SYNTAX_ERROR: &str = "syntax-error";
-pub const TOP_MODULE: &str = "top-module";
-pub const UNDECLARED_NET: &str = "undeclared-net";
-pub const UNDRIVEN_NET: &str = "undriven-net";
-pub const UNIT_INVALID: &str = "unit-invalid";
-pub const UNKNOWN_ATTR: &str = "unknown-attr";
-pub const UNKNOWN_PARAM: &str = "unknown-param";
-pub const WIDTH_MISMATCH: &str = "width-mismatch";
+macro_rules! define_diagnostic_codes {
+    ($( $(#[$meta:meta])* $name:ident => $val:literal ),* $(,)?) => {
+        $(
+            $(#[$meta])*
+            pub const $name: &str = $val;
+        )*
 
-/// All diagnostic codes produced by the kinema verification pipeline.
-pub const ALL: &[&str] = &[
-    BOARD_MISSING,
-    COMPONENT_EXTRA,
-    COMPONENT_MISSING,
-    CONSTRAINT_CONFLICT,
-    DECOUPLE_MISSING,
-    DECOUPLE_MULTI_PAD,
-    DIFFPAIR_INVALID,
-    DRC_ERROR,
-    DRC_IO_ERROR,
-    DRC_JSON_ERROR,
-    DRC_REPORT_MISSING,
-    DUPLICATE_IDENTITY,
-    DUPLICATE_MODULE,
-    ELAB_ERROR,
-    FIELD_MISMATCH,
-    FOOTPRINT_MISMATCH,
-    FOOTPRINT_MISSING,
-    HUB_DIRECT_PAD,
-    HUB_TOO_FEW,
-    IDENTITY_MISSING,
-    IO_ERROR,
-    JOIN_CYCLE,
-    JOIN_NAME,
-    KICAD_CLI_NOT_FOUND,
-    LEAF_INCOMPLETE,
-    MISSING_PORT,
-    NC_CONNECTED,
-    NC_PAD_CONNECTED,
-    NET_EXTRA,
-    NET_NAME_MISMATCH,
-    NET_PARTITION_MISMATCH,
-    NOT_FORMATTED,
-    PAD_COUNT,
-    PAD_DUPLICATE,
-    PARAM_MISSING,
-    PCB_PARSE_ERROR,
-    PIN_WIRE_ATTR,
-    PIN_WIRE_NAME,
-    PIN_WIRE_SHAPE,
-    POWER_CONFLICT,
-    POWER_UNCONNECTED,
-    RECURSIVE_INSTANCE,
-    REF_MISMATCH,
-    SINGLE_PIN_NET,
-    SYNTAX_ERROR,
-    TOP_MODULE,
-    UNDECLARED_NET,
-    UNDRIVEN_NET,
-    UNIT_INVALID,
-    UNKNOWN_ATTR,
-    UNKNOWN_PARAM,
-    WIDTH_MISMATCH,
-];
+        /// All diagnostic codes produced by the kinema verification pipeline.
+        pub const ALL: &[&str] = &[
+            $( $name, )*
+        ];
+    };
+}
+
+define_diagnostic_codes! {
+    BOARD_MISSING => "board-missing",
+    COMPONENT_EXTRA => "component-extra",
+    COMPONENT_MISSING => "component-missing",
+    CONSTRAINT_CONFLICT => "constraint-conflict",
+    DECOUPLE_MISSING => "decouple-missing",
+    DECOUPLE_MULTI_PAD => "decouple-multi-pad",
+    DIFFPAIR_INVALID => "diffpair-invalid",
+    DRC_ERROR => "drc-error",
+    DRC_IO_ERROR => "drc-io-error",
+    DRC_JSON_ERROR => "drc-json-error",
+    DRC_REPORT_MISSING => "drc-report-missing",
+    DUPLICATE_IDENTITY => "duplicate-identity",
+    DUPLICATE_MODULE => "duplicate-module",
+    ELAB_ERROR => "elab-error",
+    FIELD_MISMATCH => "field-mismatch",
+    FOOTPRINT_MISMATCH => "footprint-mismatch",
+    FOOTPRINT_MISSING => "footprint-missing",
+    HUB_DIRECT_PAD => "hub-direct-pad",
+    HUB_TOO_FEW => "hub-too-few",
+    IDENTITY_MISSING => "identity-missing",
+    IO_ERROR => "io-error",
+    JOIN_CYCLE => "join-cycle",
+    JOIN_NAME => "join-name",
+    KICAD_CLI_NOT_FOUND => "kicad-cli-not-found",
+    LEAF_INCOMPLETE => "leaf-incomplete",
+    MISSING_PORT => "missing-port",
+    NC_CONNECTED => "nc-connected",
+    NC_PAD_CONNECTED => "nc-pad-connected",
+    NET_EXTRA => "net-extra",
+    NET_NAME_MISMATCH => "net-name-mismatch",
+    NET_PARTITION_MISMATCH => "net-partition-mismatch",
+    NOT_FORMATTED => "not-formatted",
+    PAD_COUNT => "pad-count",
+    PAD_DUPLICATE => "pad-duplicate",
+    PARAM_MISSING => "param-missing",
+    PCB_PARSE_ERROR => "pcb-parse-error",
+    PIN_WIRE_ATTR => "pin-wire-attr",
+    PIN_WIRE_NAME => "pin-wire-name",
+    PIN_WIRE_SHAPE => "pin-wire-shape",
+    POWER_CONFLICT => "power-conflict",
+    POWER_UNCONNECTED => "power-unconnected",
+    RECURSIVE_INSTANCE => "recursive-instance",
+    REF_MISMATCH => "ref-mismatch",
+    SINGLE_PIN_NET => "single-pin-net",
+    SYNTAX_ERROR => "syntax-error",
+    TOP_MODULE => "top-module",
+    UNDECLARED_NET => "undeclared-net",
+    UNDRIVEN_NET => "undriven-net",
+    UNIT_INVALID => "unit-invalid",
+    UNKNOWN_ATTR => "unknown-attr",
+    UNKNOWN_PARAM => "unknown-param",
+    WIDTH_MISMATCH => "width-mismatch",
+}
 
 #[cfg(test)]
 mod tests {

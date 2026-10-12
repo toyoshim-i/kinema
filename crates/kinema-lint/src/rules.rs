@@ -139,7 +139,7 @@ pub fn check_rules_with_resolver(
     // Check modules individually
     for file in source_files {
         for m in &file.modules {
-            check_module(m, &module_map, &fp_resolver, &mut diags);
+            check_module(m, &module_map, fp_resolver, &mut diags);
         }
     }
 
