@@ -41,6 +41,7 @@ pub struct FpLibTable {
 pub struct FootprintResolverOptions {
     pub fp_lib_table: Option<PathBuf>,
     pub kicad_config_dir: Option<PathBuf>,
+    pub kicad_config_home: Option<PathBuf>,
     pub kicad_footprint_dir: Option<PathBuf>,
     pub search_dirs: Vec<PathBuf>,
 }
@@ -168,11 +169,23 @@ impl FpLibTable {
         explicit_config_dir: Option<&Path>,
         explicit_footprint_dir: Option<&Path>,
     ) -> Option<Self> {
-        let is_explicit = explicit_config_dir.is_some() || std::env::var("KICAD_CONFIG_DIR").is_ok();
-        let config_dir = explicit_config_dir
-            .map(|p| p.to_path_buf())
-            .or_else(|| std::env::var("KICAD_CONFIG_DIR").ok().map(PathBuf::from))
-            .or_else(kicad_config_dir)?;
+        Self::discover_global_with_dirs(explicit_config_dir, None, explicit_footprint_dir)
+    }
+
+    pub fn discover_global_with_dirs(
+        explicit_config_dir: Option<&Path>,
+        default_config_home: Option<&Path>,
+        explicit_footprint_dir: Option<&Path>,
+    ) -> Option<Self> {
+        let (config_dir, is_explicit) = if let Some(dir) = explicit_config_dir {
+            (dir.to_path_buf(), true)
+        } else if let Some(home) = default_config_home {
+            (home.to_path_buf(), false)
+        } else if let Ok(dir) = std::env::var("KICAD_CONFIG_DIR") {
+            (PathBuf::from(dir), true)
+        } else {
+            (kicad_config_dir()?, false)
+        };
 
         let (version_dir, table_path) = if is_explicit {
             if config_dir.join("fp-lib-table").exists() {
@@ -236,8 +249,9 @@ impl FpLibTable {
             }
         }
 
-        let global_table = Self::discover_global_with_dir(
+        let global_table = Self::discover_global_with_dirs(
             options.kicad_config_dir.as_deref(),
+            options.kicad_config_home.as_deref(),
             options.kicad_footprint_dir.as_deref(),
         );
         let project_table = Self::discover_project(start_dir);

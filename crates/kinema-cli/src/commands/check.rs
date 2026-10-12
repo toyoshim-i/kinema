@@ -155,6 +155,7 @@ pub fn run_check(args: &CheckArgs) -> CommandResult {
         let resolver_opts = FootprintResolverOptions {
             fp_lib_table: effective_fp_table,
             kicad_config_dir: effective_config_dir,
+            kicad_config_home: None,
             kicad_footprint_dir: effective_footprint_dir,
             search_dirs: effective_search_paths,
         };

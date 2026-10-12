@@ -395,16 +395,16 @@ mod tests {
         let config_dir = fixture_dir.join("config");
         let footprints_dir = fixture_dir.join("footprints");
 
-        // 1. Default discovery (using KICAD_CONFIG_HOME pointing to config):
+        // 1. Default discovery (using kicad_config_home in options pointing to config):
         // Must prioritize 10.0/ over root fp-lib-table, follow nested table, and resolve Package_SO via KICAD10_FOOTPRINT_DIR
         let options = FootprintResolverOptions {
             fp_lib_table: None,
             kicad_config_dir: None,
+            kicad_config_home: Some(config_dir.clone()),
             kicad_footprint_dir: Some(footprints_dir.clone()),
             search_dirs: vec![],
         };
 
-        std::env::set_var("KICAD_CONFIG_HOME", &config_dir);
         let resolver = FootprintResolver::auto_discover_with_options(manifest_dir, &options);
 
         let table = resolver.table.as_ref().expect("Table must be discovered");
@@ -424,6 +424,7 @@ mod tests {
         let explicit_options = FootprintResolverOptions {
             fp_lib_table: None,
             kicad_config_dir: Some(config_dir),
+            kicad_config_home: None,
             kicad_footprint_dir: Some(footprints_dir.clone()),
             search_dirs: vec![],
         };
@@ -438,8 +439,5 @@ mod tests {
 
         let legacy_fp = explicit_resolver.resolve("Legacy_SO:SOIC-8_Legacy");
         assert!(legacy_fp.is_ok(), "Legacy_SO must be resolved via root table when config dir is explicitly specified: {:?}", legacy_fp.err());
-
-        // Clean up environment variable
-        std::env::remove_var("KICAD_CONFIG_HOME");
     }
 }
