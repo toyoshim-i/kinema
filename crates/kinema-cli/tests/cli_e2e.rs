@@ -10,7 +10,15 @@ fn kinema_cmd() -> Command {
     cmd.current_dir(get_workspace_root());
     let empty_dir = get_workspace_root().join("target/empty_kicad_config");
     let _ = std::fs::create_dir_all(&empty_dir);
-    cmd.env("KICAD_CONFIG_HOME", &empty_dir);
+    cmd.env("KICAD_CONFIG_HOME", &empty_dir)
+        .env_remove("KICAD_CONFIG_DIR")
+        .env_remove("KICAD_FOOTPRINT_DIR")
+        .env_remove("KISYSMOD")
+        .env_remove("KICAD10_FOOTPRINT_DIR")
+        .env_remove("KICAD9_FOOTPRINT_DIR")
+        .env_remove("KICAD8_FOOTPRINT_DIR")
+        .env_remove("KICAD7_FOOTPRINT_DIR")
+        .env_remove("KICAD6_FOOTPRINT_DIR");
     cmd
 }
 
