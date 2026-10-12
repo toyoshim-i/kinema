@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "agent-man"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f234b0b1f2cf7569b7e68ccf519f8a968f150eb8f5f7ae3d0ceb6b074733f5cf"
+checksum = "9f5b0f3c1cbef6fab7b66f721e0d4f680ba67006df20729799f12ebaa3951df1"
 dependencies = [
  "clap",
  "serde",
